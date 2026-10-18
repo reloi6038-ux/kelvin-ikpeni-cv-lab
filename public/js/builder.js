@@ -1,6 +1,15 @@
 // ---------------------------------------------------------------------------
-// Builder controller.
-// Phase 7 additions: download menu (PDF + DOCX), export handlers, loading UI.
+// Kelvin Ikpeni CV Lab — Builder page controller.
+//
+// Responsibilities:
+//  - Determine initial template (query ?template → kilab.pendingTemplateId →
+//    active resume's template → default).
+//  - Load existing resume (from ?id=, kilab.activeResumeId, or local draft).
+//  - Initialize editor and live preview.
+//  - Autosave to localStorage (debounced), manual save to API.
+//  - Undo/redo snapshots, resume manager, completion ring, template warnings.
+//  - Download menu (PDF via browser print, DOCX via server).
+//  - Screen-reader announcements via kilab:announce events (Phase 9).
 // ---------------------------------------------------------------------------
 
 import { apiFetch } from './session.js';
@@ -29,6 +38,8 @@ const state = {
 const templatesById = new Map();
 let savedResumes = [];
 
+// ---- DOM cache ---------------------------------------------------------
+
 function cacheEls() {
   els.title = document.querySelector('[data-resume-title]');
   els.templateSelect = document.querySelector('[data-template-select]');
@@ -53,6 +64,25 @@ function cacheEls() {
   els.workspace = document.querySelector('[data-workspace]');
 }
 
+// ---- Utility -----------------------------------------------------------
+
+function escapeHtml(s = '') {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+  catch { return iso; }
+}
+
+function announce(text) {
+  if (!text) return;
+  document.dispatchEvent(new CustomEvent('kilab:announce', { detail: { text } }));
+}
+
 function setStatus(text, kind = 'idle') {
   if (!els.statusEl) return;
   els.statusEl.textContent = text;
@@ -68,23 +98,23 @@ function toast(msg, kind = 'info') {
   toast._t = setTimeout(() => { els.toast.hidden = true; }, 3500);
 }
 
-function escape(s = '') {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
-}
-function formatDate(iso) {
-  if (!iso) return '';
-  try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
-  catch { return iso; }
-}
-
 // ---- Drafts ------------------------------------------------------------
 
-function draftKey() { return DRAFT_PREFIX + (state.resumeId || 'new'); }
-function saveDraft() { try { localStorage.setItem(draftKey(), JSON.stringify(state.resume)); } catch { /* */ } }
-function loadDraft() { try { const r = localStorage.getItem(draftKey()); return r ? JSON.parse(r) : null; } catch { return null; } }
-function clearDraft() { try { localStorage.removeItem(draftKey()); } catch { /* */ } }
+function draftKey() {
+  return DRAFT_PREFIX + (state.resumeId || 'new');
+}
+function saveDraft() {
+  try { localStorage.setItem(draftKey(), JSON.stringify(state.resume)); } catch { /* ignore */ }
+}
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(draftKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function clearDraft() {
+  try { localStorage.removeItem(draftKey()); } catch { /* ignore */ }
+}
 
 // ---- Templates ---------------------------------------------------------
 
@@ -104,18 +134,22 @@ async function loadTemplates() {
         .map((t) => `<option value="${t.id}">${t.name} — ${t.category}</option>`)
         .join('');
     }
-  } catch (err) { console.error('Failed to load templates:', err); }
+  } catch (err) {
+    console.error('Failed to load templates:', err);
+  }
 }
 
-// ---- Warnings ----------------------------------------------------------
+// ---- Template-support warnings -----------------------------------------
 
 function checkTemplateSupport() {
   if (!els.warnEl) return;
   const template = templatesById.get(state.resume.templateId);
   if (!template) { els.warnEl.hidden = true; return; }
+
   const supported = new Set(template.supportedSections || []);
   const visible = state.resume.sectionVisibility || {};
   const missing = [];
+
   for (const [key, on] of Object.entries(visible)) {
     if (!on) continue;
     if (key === 'contact') continue;
@@ -126,7 +160,9 @@ function checkTemplateSupport() {
       if (hasData) missing.push(key);
     }
   }
+
   if (!missing.length) { els.warnEl.hidden = true; return; }
+
   const labels = getSectionLabels();
   els.warnEl.hidden = false;
   els.warnEl.textContent =
@@ -134,7 +170,7 @@ function checkTemplateSupport() {
     `Switch templates or hide those sections in Section visibility.`;
 }
 
-// ---- Completion --------------------------------------------------------
+// ---- Completion ring ---------------------------------------------------
 
 function computeCompletion() {
   const r = state.resume;
@@ -148,6 +184,7 @@ function computeCompletion() {
   ];
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
+
 function renderCompletion() {
   if (!els.completionEl || !els.completionValueEl) return;
   const pct = computeCompletion();
@@ -170,7 +207,7 @@ function renderPreview() {
   }
 }
 
-// ---- Autosave & history -----------------------------------------------
+// ---- Autosave & history ------------------------------------------------
 
 let saveTimer = null;
 let historyCommitTimer = null;
@@ -216,8 +253,24 @@ function applyHistorySnapshot(snapshot) {
   setStatus('Reverted — unsaved changes', 'dirty');
   state.isDirty = true;
 }
-function undo() { if (state.history) { const s = state.history.undo(); if (s) applyHistorySnapshot(s); } }
-function redo() { if (state.history) { const s = state.history.redo(); if (s) applyHistorySnapshot(s); } }
+
+function undo() {
+  if (!state.history) return;
+  const s = state.history.undo();
+  if (s) {
+    applyHistorySnapshot(s);
+    announce('Undone.');
+  }
+}
+
+function redo() {
+  if (!state.history) return;
+  const s = state.history.redo();
+  if (s) {
+    applyHistorySnapshot(s);
+    announce('Redone.');
+  }
+}
 
 // ---- Save / delete -----------------------------------------------------
 
@@ -226,11 +279,15 @@ async function manualSave() {
   state.isSaving = true;
   setStatus('Saving…', 'saving');
   if (els.saveBtn) els.saveBtn.disabled = true;
+
   try {
     const payload = JSON.parse(JSON.stringify(state.resume));
-    delete payload._id; delete payload.id;
-    delete payload.createdAt; delete payload.updatedAt;
-    delete payload.ownerHash; delete payload.deletedAt;
+    delete payload._id;
+    delete payload.id;
+    delete payload.createdAt;
+    delete payload.updatedAt;
+    delete payload.ownerHash;
+    delete payload.deletedAt;
 
     const res = state.resumeId
       ? await apiFetch(`/api/resumes/${state.resumeId}`, { method: 'PATCH', body: JSON.stringify(payload) })
@@ -243,11 +300,13 @@ async function manualSave() {
     state.isDirty = false;
     setStatus('Saved', 'ok');
     toast('Resume saved', 'ok');
+    announce('Resume saved.');
     updateDownloadMenuState();
   } catch (err) {
     console.error('Save failed:', err);
     setStatus('Save failed — draft kept locally', 'error');
     toast('Could not save to server. Your draft is safe locally.', 'error');
+    announce('Save failed. Your draft is kept locally.');
   } finally {
     state.isSaving = false;
     if (els.saveBtn) els.saveBtn.disabled = false;
@@ -264,19 +323,25 @@ async function handleDeleteCurrent() {
     setActiveResumeId(null);
     state.resumeId = null;
     toast('Resume deleted.', 'ok');
+    announce('Resume deleted.');
     setStatus('Not saved', 'idle');
     updateDownloadMenuState();
   } catch (err) {
     console.error(err);
     toast('Delete failed: ' + err.message, 'error');
+    announce('Delete failed.');
   }
 }
 
 // ---- Resume manager ----------------------------------------------------
 
 async function refreshSavedResumes() {
-  try { savedResumes = await listResumes(); }
-  catch (err) { console.error('List resumes failed:', err); savedResumes = []; }
+  try {
+    savedResumes = await listResumes();
+  } catch (err) {
+    console.error('List resumes failed:', err);
+    savedResumes = [];
+  }
   renderResumeMenu();
 }
 
@@ -288,7 +353,7 @@ function renderResumeMenu() {
   }
   els.resumeList.innerHTML = savedResumes.map((r) => `
     <li class="resume-menu__item${r.id === state.resumeId ? ' resume-menu__item--active' : ''}" data-id="${r.id}">
-      <div class="resume-menu__title">${escape(r.title || 'Untitled Resume')}</div>
+      <div class="resume-menu__title">${escapeHtml(r.title || 'Untitled Resume')}</div>
       <div class="resume-menu__meta">Updated ${formatDate(r.updatedAt)}</div>
       <div class="resume-menu__actions">
         <button type="button" class="btn btn--ghost btn--sm" data-act="open">Open</button>
@@ -308,35 +373,50 @@ async function handleResumeMenuClick(e) {
 
   if (act === 'open') {
     if (!confirm('Open this resume? Unsaved changes to the current one will be lost.')) return;
-    const data = await apiFetch(`/api/resumes/${id}`);
-    state.resumeId = id;
-    state.resume = normalizeResume(data.resume);
-    setActiveResumeId(id);
-    state.history = createHistory(state.resume);
-    if (els.title) els.title.value = state.resume.title;
-    if (els.templateSelect) els.templateSelect.value = state.resume.templateId;
-    initEditor({ state, panelEl: els.panel, navEl: els.nav, onChange: onResumeChanged });
-    renderPreview();
-    renderCompletion();
-    checkTemplateSupport();
-    updateUndoRedoButtons();
-    setStatus('Loaded', 'ok');
-    hideResumeMenu();
-    updateDownloadMenuState();
+    try {
+      const data = await apiFetch(`/api/resumes/${id}`);
+      state.resumeId = id;
+      state.resume = normalizeResume(data.resume);
+      setActiveResumeId(id);
+      state.history = createHistory(state.resume);
+      if (els.title) els.title.value = state.resume.title;
+      if (els.templateSelect) els.templateSelect.value = state.resume.templateId;
+      initEditor({ state, panelEl: els.panel, navEl: els.nav, onChange: onResumeChanged });
+      renderPreview();
+      renderCompletion();
+      checkTemplateSupport();
+      updateUndoRedoButtons();
+      setStatus('Loaded', 'ok');
+      hideResumeMenu();
+      updateDownloadMenuState();
+      announce('Resume loaded.');
+    } catch (err) {
+      toast('Open failed: ' + err.message, 'error');
+    }
   } else if (act === 'dup') {
     try {
       const copy = await duplicateResume(id);
       toast('Duplicated: ' + copy.title, 'ok');
+      announce('Resume duplicated.');
       await refreshSavedResumes();
-    } catch (err) { toast('Duplicate failed: ' + err.message, 'error'); }
+    } catch (err) {
+      toast('Duplicate failed: ' + err.message, 'error');
+    }
   } else if (act === 'del') {
     if (!confirm('Delete this saved resume?')) return;
     try {
       await deleteResumeById(id);
-      if (id === state.resumeId) { state.resumeId = null; setActiveResumeId(null); updateDownloadMenuState(); }
+      if (id === state.resumeId) {
+        state.resumeId = null;
+        setActiveResumeId(null);
+        updateDownloadMenuState();
+      }
       toast('Deleted.', 'ok');
+      announce('Resume deleted.');
       await refreshSavedResumes();
-    } catch (err) { toast('Delete failed: ' + err.message, 'error'); }
+    } catch (err) {
+      toast('Delete failed: ' + err.message, 'error');
+    }
   }
 }
 
@@ -346,7 +426,9 @@ function toggleResumeMenu() {
   els.resumeMenu.hidden = false;
   refreshSavedResumes();
 }
-function hideResumeMenu() { if (els.resumeMenu) els.resumeMenu.hidden = true; }
+function hideResumeMenu() {
+  if (els.resumeMenu) els.resumeMenu.hidden = true;
+}
 
 // ---- Download menu -----------------------------------------------------
 
@@ -366,29 +448,36 @@ function toggleDownloadMenu() {
   updateDownloadMenuState();
   els.downloadMenu.hidden = false;
 }
-function hideDownloadMenu() { if (els.downloadMenu) els.downloadMenu.hidden = true; }
+function hideDownloadMenu() {
+  if (els.downloadMenu) els.downloadMenu.hidden = true;
+}
 
 async function handleDownloadClick(e) {
   const btn = e.target.closest('[data-export]');
   if (!btn) return;
   const kind = btn.dataset.export;
   if (state.isExporting) return;
+
   state.isExporting = true;
   btn.disabled = true;
   const original = btn.textContent;
   btn.textContent = kind === 'pdf' ? 'Preparing PDF…' : 'Preparing DOCX…';
+
   try {
     if (kind === 'pdf') {
       await exportPdf(state.resume);
-      toast('Print dialog opened — choose “Save as PDF”.', 'info');
+      toast('Print dialog opened — choose "Save as PDF".', 'info');
+      announce('Print dialog opened. Choose Save as PDF.');
     } else if (kind === 'docx') {
       await exportDocx(state.resumeId);
       toast('DOCX download started.', 'ok');
+      announce('DOCX download started.');
     }
     hideDownloadMenu();
   } catch (err) {
     console.error('Export failed:', err);
     toast('Export failed: ' + err.message, 'error');
+    announce('Export failed. ' + err.message);
   } finally {
     state.isExporting = false;
     btn.disabled = false;
@@ -397,7 +486,7 @@ async function handleDownloadClick(e) {
   }
 }
 
-// ---- Misc --------------------------------------------------------------
+// ---- Normalization -----------------------------------------------------
 
 function normalizeResume(r) {
   const base = createEmptyResume(r.templateId || 'modern-professional');
@@ -408,6 +497,8 @@ function normalizeResume(r) {
     theme: { ...base.theme, ...(r.theme || {}) },
   };
 }
+
+// ---- Init --------------------------------------------------------------
 
 async function init() {
   cacheEls();
@@ -427,15 +518,21 @@ async function init() {
         const res = await apiFetch(`/api/resumes/${activeId}`);
         state.resume = normalizeResume(res.resume);
         setStatus('Loaded from server', 'ok');
-      } catch {
+      } catch (err) {
+        console.warn('Falling back to new resume:', err.message);
         state.resume = createEmptyResume(pendingTpl || 'modern-professional');
         state.resumeId = null;
       }
     }
   } else {
     const draft = loadDraft();
-    state.resume = draft ? normalizeResume(draft) : createEmptyResume(pendingTpl || 'modern-professional');
-    setStatus(draft ? 'Restored unsaved draft' : 'Ready', draft ? 'ok' : 'idle');
+    if (draft) {
+      state.resume = normalizeResume(draft);
+      setStatus('Restored unsaved draft', 'ok');
+    } else {
+      state.resume = createEmptyResume(pendingTpl || 'modern-professional');
+      setStatus('Ready', 'idle');
+    }
   }
 
   if (pendingTpl) state.resume.templateId = pendingTpl;
@@ -448,6 +545,7 @@ async function init() {
       onResumeChanged();
     });
   }
+
   if (els.templateSelect) {
     if (state.resume.templateId) els.templateSelect.value = state.resume.templateId;
     els.templateSelect.addEventListener('change', (e) => {
@@ -460,21 +558,39 @@ async function init() {
 
   if (els.saveBtn) els.saveBtn.addEventListener('click', manualSave);
   if (els.deleteBtn) els.deleteBtn.addEventListener('click', handleDeleteCurrent);
+
   if (els.resumeBtn) els.resumeBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleResumeMenu(); });
   if (els.resumeList) els.resumeList.addEventListener('click', handleResumeMenuClick);
+
   if (els.undoBtn) els.undoBtn.addEventListener('click', undo);
   if (els.redoBtn) els.redoBtn.addEventListener('click', redo);
+
   if (els.downloadBtn) els.downloadBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleDownloadMenu(); });
   if (els.downloadMenu) els.downloadMenu.addEventListener('click', handleDownloadClick);
 
   document.addEventListener('click', (e) => {
-    if (els.resumeMenu && !els.resumeMenu.hidden && !els.resumeMenu.contains(e.target) && e.target !== els.resumeBtn) hideResumeMenu();
-    if (els.downloadMenu && !els.downloadMenu.hidden && !els.downloadMenu.contains(e.target) && e.target !== els.downloadBtn) hideDownloadMenu();
+    if (els.resumeMenu && !els.resumeMenu.hidden &&
+        !els.resumeMenu.contains(e.target) && e.target !== els.resumeBtn) {
+      hideResumeMenu();
+    }
+    if (els.downloadMenu && !els.downloadMenu.hidden &&
+        !els.downloadMenu.contains(e.target) && e.target !== els.downloadBtn) {
+      hideDownloadMenu();
+    }
   });
 
-  if (els.mobileToggle) els.mobileToggle.addEventListener('click', () => els.workspace.classList.toggle('workspace--show-preview'));
+  if (els.mobileToggle) {
+    els.mobileToggle.addEventListener('click', () => {
+      els.workspace.classList.toggle('workspace--show-preview');
+    });
+  }
 
-  initEditor({ state, panelEl: els.panel, navEl: els.nav, onChange: onResumeChanged });
+  initEditor({
+    state,
+    panelEl: els.panel,
+    navEl: els.nav,
+    onChange: onResumeChanged,
+  });
 
   renderPreview();
   renderCompletion();
@@ -484,14 +600,37 @@ async function init() {
 
   window.addEventListener('keydown', (e) => {
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); manualSave(); }
-    else if (mod && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
-    else if (mod && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); }
+    if (mod && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      manualSave();
+    } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      undo();
+    } else if (mod && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+      e.preventDefault();
+      redo();
+    } else if (e.key === 'Escape') {
+      if (els.resumeMenu && !els.resumeMenu.hidden) hideResumeMenu();
+      if (els.downloadMenu && !els.downloadMenu.hidden) hideDownloadMenu();
+    }
   });
 
-  window.addEventListener('beforeunload', (e) => { if (state.isDirty) { e.preventDefault(); e.returnValue = ''; } });
-  try { localStorage.removeItem(PENDING_TEMPLATE_KEY); } catch { /* */ }
+  window.addEventListener('beforeunload', (e) => {
+    if (state.isDirty) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  try { localStorage.removeItem(PENDING_TEMPLATE_KEY); } catch { /* ignore */ }
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-else init();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+
+// Exports for Phase 7 export module and future use.
+export function getCurrentResume() { return state.resume; }
+export function getCurrentResumeId() { return state.resumeId; }

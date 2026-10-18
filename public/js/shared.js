@@ -1,6 +1,9 @@
-// Injects the shared header and footer into every page, wires theme toggle and
-// mobile menu, and marks the active nav link. Kept deliberately small; all
-// styling is in main.css.
+// Shared site chrome (header + footer) + accessibility enhancements.
+// - Injects a skip link, header, footer, and #kilab-live live region.
+// - Marks the active nav link.
+// - Wires theme toggle and mobile menu.
+// - Moves focus to the page <h1> on load (unless URL has a hash).
+// - Listens for 'kilab:announce' to read messages to screen readers.
 
 (function () {
   'use strict';
@@ -38,11 +41,9 @@
       <span class="brand__mark" aria-hidden="true">K</span>
       <span class="brand__name"><strong>${BRAND.name}</strong>&nbsp;${BRAND.suffix}</span>
     </a>
-
     <nav class="nav" id="primary-nav" aria-label="Primary">
       ${links}
     </nav>
-
     <div class="header__actions">
       <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle dark mode" aria-pressed="false">
         ${svgMoon()}
@@ -106,25 +107,36 @@
     const body = document.body;
     if (!body) return;
 
-    // Add a skip link
     const skip = document.createElement('a');
     skip.className = 'skip-link';
     skip.href = '#main';
     skip.textContent = 'Skip to content';
     body.insertBefore(skip, body.firstChild);
 
-    // Header goes at the top; footer at the bottom.
     body.insertAdjacentHTML('afterbegin', buildHeader());
     body.insertAdjacentHTML('beforeend', buildFooter());
 
-    // Ensure main has id="main" for the skip link
     const main = document.querySelector('main');
     if (main && !main.id) main.id = 'main';
+
+    if (!document.getElementById('kilab-live')) {
+      const live = document.createElement('div');
+      live.id = 'kilab-live';
+      live.className = 'sr-only';
+      live.setAttribute('role', 'status');
+      live.setAttribute('aria-live', 'polite');
+      live.setAttribute('aria-atomic', 'true');
+      body.appendChild(live);
+      document.addEventListener('kilab:announce', (e) => {
+        const t = e && e.detail && e.detail.text;
+        if (!t) return;
+        live.textContent = '';
+        setTimeout(() => { live.textContent = t; }, 50);
+      });
+    }
   }
 
-  // --- Theme toggle -------------------------------------------------------
   const THEME_KEY = 'kilab.theme';
-
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     const btn = document.getElementById('theme-toggle');
@@ -134,33 +146,29 @@
     let stored = null;
     try { stored = localStorage.getItem(THEME_KEY); } catch { /* ignore */ }
     const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const theme = stored || (prefersDark ? 'dark' : 'light');
-    applyTheme(theme);
+    applyTheme(stored || (prefersDark ? 'dark' : 'light'));
   }
   function wireThemeToggle() {
     const btn = document.getElementById('theme-toggle');
     if (!btn) return;
-    btn.addEventListener('click', function () {
+    btn.addEventListener('click', () => {
       const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
       const next = current === 'dark' ? 'light' : 'dark';
       applyTheme(next);
       try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
     });
   }
-
-  // --- Mobile menu --------------------------------------------------------
   function wireMenuToggle() {
     const btn = document.getElementById('menu-toggle');
     const nav = document.getElementById('primary-nav');
     if (!btn || !nav) return;
-    btn.addEventListener('click', function () {
+    btn.addEventListener('click', () => {
       const isOpen = nav.getAttribute('data-open') === 'true';
       nav.setAttribute('data-open', String(!isOpen));
       btn.setAttribute('aria-expanded', String(!isOpen));
       btn.setAttribute('aria-label', !isOpen ? 'Close menu' : 'Open menu');
     });
-    // Close when navigating (mobile)
-    nav.addEventListener('click', function (e) {
+    nav.addEventListener('click', (e) => {
       if (e.target.tagName === 'A') {
         nav.setAttribute('data-open', 'false');
         btn.setAttribute('aria-expanded', 'false');
@@ -168,17 +176,26 @@
     });
   }
 
-  // --- Boot --------------------------------------------------------------
-  initTheme(); // apply before first paint of content
+  function focusHeading() {
+    if (window.location.hash) return;
+    const h1 = document.querySelector('main h1, main .section__header h1, h1');
+    if (!h1) return;
+    if (!h1.hasAttribute('tabindex')) h1.setAttribute('tabindex', '-1');
+    try { h1.focus({ preventScroll: true }); } catch { /* ignore */ }
+  }
+
+  initTheme();
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       injectLayout();
       wireThemeToggle();
       wireMenuToggle();
+      focusHeading();
     });
   } else {
     injectLayout();
     wireThemeToggle();
     wireMenuToggle();
+    focusHeading();
   }
 })();
