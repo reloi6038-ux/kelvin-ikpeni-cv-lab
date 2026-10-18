@@ -1,9 +1,8 @@
 // ---------------------------------------------------------------------------
-// Editor: maintains state.resume, renders each section's form, wires events.
-// Every mutation re-renders the current section's form (only when adding or
-// removing entries) and dispatches a 'resume:changed' CustomEvent on document.
-// The builder controller listens for that event to re-render the preview and
-// debounce autosave.
+// Editor: form for every resume section + section reordering + theme reset.
+// Mutations dispatch 'resume:changed' on document.
+// Mutations that should be captured for undo dispatch 'resume:mutation' with
+// a `commit` timestamp; the builder decides when to snapshot.
 // ---------------------------------------------------------------------------
 
 const SECTION_LABELS = {
@@ -23,6 +22,14 @@ const SECTION_LABELS = {
   custom: 'Custom sections',
 };
 
+const TEMPLATE_DEFAULT_THEME = {
+  primaryColor: '#0f172a',
+  accentColor: '#2563eb',
+  fontFamily: 'Inter',
+  fontSize: 11,
+  spacing: 1.0,
+};
+
 export function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -39,10 +46,7 @@ export function createEmptyResume(templateId = 'modern-professional') {
     experience: [], education: [], skills: [], projects: [],
     certifications: [], languages: [], awards: [], volunteer: [],
     publications: [], memberships: [], references: [], customSections: [],
-    theme: {
-      primaryColor: '#0f172a', accentColor: '#2563eb',
-      fontFamily: 'Inter', fontSize: 11, spacing: 1.0,
-    },
+    theme: { ...TEMPLATE_DEFAULT_THEME },
     sectionOrder: [
       'summary', 'experience', 'education', 'skills', 'projects',
       'certifications', 'languages', 'awards', 'volunteer',
@@ -106,15 +110,13 @@ function textarea(value, opts = {}) {
   return t;
 }
 
-// ---- Section renderers --------------------------------------------------
+// ---- Renderers ----------------------------------------------------------
 
 function renderContact(state) {
   const c = state.resume.contact;
   const wrap = el('div', { class: 'form-grid' });
 
-  // --- Photo URL row -------------------------------------------------------
   const photoRow = el('div', { class: 'photo-url-row' });
-
   const thumb = el('div', { class: 'photo-url-thumb', 'aria-hidden': 'true' });
   const img = el('img', { alt: '', referrerpolicy: 'no-referrer', loading: 'lazy' });
   img.style.display = 'none';
@@ -137,12 +139,8 @@ function renderContact(state) {
     type: 'url',
   });
 
-  if (c.photoUrl) {
-    thumb.dataset.state = 'loading';
-    img.src = c.photoUrl;
-  } else {
-    thumb.dataset.state = 'empty';
-  }
+  if (c.photoUrl) { thumb.dataset.state = 'loading'; img.src = c.photoUrl; }
+  else { thumb.dataset.state = 'empty'; }
 
   photoInput.addEventListener('input', (e) => {
     const v = e.target.value.trim();
@@ -164,11 +162,10 @@ function renderContact(state) {
     photoInput,
   ]);
   photoLabel.appendChild(el('span', { class: 'field__hint' },
-    'Paste a direct image URL (ending in .jpg, .png, .webp, or .svg). Must be publicly reachable over https. Leave blank to hide the photo.'));
+    'Paste a direct image URL. Must be publicly reachable over https. Leave blank to hide the photo.'));
 
   const photoClear = el('button', {
-    type: 'button',
-    class: 'btn btn--ghost',
+    type: 'button', class: 'btn btn--ghost',
     onclick: () => {
       c.photoUrl = '';
       photoInput.value = '';
@@ -185,7 +182,6 @@ function renderContact(state) {
   photoRow.appendChild(photoLabel);
   wrap.appendChild(photoRow);
 
-  // --- Standard fields -----------------------------------------------------
   const inputs = [
     ['fullName', 'Full name', 'Amara Okafor', 'name'],
     ['title', 'Professional title', 'Senior Product Designer', 'organization-title'],
@@ -561,9 +557,7 @@ function renderAppearance(state) {
   const t = state.resume.theme;
   const grid = el('div', { class: 'form-grid form-grid--2' });
 
-  const colorWrap = el('div', { class: 'field' }, [
-    el('span', { class: 'field__label' }, 'Accent color'),
-  ]);
+  const colorWrap = el('div', { class: 'field' }, [el('span', { class: 'field__label' }, 'Accent color')]);
   const colorInput = el('input', { type: 'color', class: 'input input--color' });
   colorInput.value = t.accentColor || '#2563eb';
   colorInput.addEventListener('input', (e) => { t.accentColor = e.target.value; emitChange(); });
@@ -588,6 +582,17 @@ function renderAppearance(state) {
   spacing.value = t.spacing || 1;
   spacing.addEventListener('input', (e) => { t.spacing = parseFloat(e.target.value); emitChange(); });
   grid.appendChild(field(`Line spacing (${(t.spacing || 1).toFixed(2)}×)`, spacing));
+
+  // Reset theme button
+  const reset = el('button', {
+    type: 'button', class: 'btn btn--secondary', style: 'grid-column:1 / -1;justify-self:start;',
+    onclick: () => {
+      state.resume.theme = { ...TEMPLATE_DEFAULT_THEME };
+      rerenderCurrent();
+      emitChange();
+    },
+  }, 'Reset theme to default');
+  grid.appendChild(reset);
   return grid;
 }
 
@@ -612,6 +617,79 @@ function renderVisibility(state) {
   return wrap;
 }
 
+function renderReorder(state) {
+  const wrap = el('div', { class: 'reorder-list' });
+  wrap.appendChild(el('p', { class: 'field__hint' },
+    'Drag to reorder, or use the Up/Down buttons. Order affects the preview and the exported document.'));
+
+  const order = (state.resume.sectionOrder || []).filter((k) => k in SECTION_LABELS);
+  order.forEach((key, idx) => {
+    const row = el('div', { class: 'reorder-item', draggable: 'true', dataset: { key, idx: String(idx) } });
+
+    const handle = el('span', { class: 'reorder-item__handle', 'aria-hidden': 'true' }, '⋮⋮');
+    const label = el('span', { class: 'reorder-item__label' }, SECTION_LABELS[key]);
+
+    const up = el('button', {
+      type: 'button', class: 'btn btn--ghost btn--icon', 'aria-label': 'Move up',
+      disabled: idx === 0,
+      onclick: () => move(idx, -1),
+    }, '↑');
+    const down = el('button', {
+      type: 'button', class: 'btn btn--ghost btn--icon', 'aria-label': 'Move down',
+      disabled: idx === order.length - 1,
+      onclick: () => move(idx, 1),
+    }, '↓');
+
+    row.appendChild(handle);
+    row.appendChild(label);
+    row.appendChild(up);
+    row.appendChild(down);
+
+    // Drag events
+    row.addEventListener('dragstart', (e) => {
+      row.classList.add('reorder-item--dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(idx));
+    });
+    row.addEventListener('dragend', () => row.classList.remove('reorder-item--dragging'));
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      row.classList.add('reorder-item--over');
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('reorder-item--over'));
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.classList.remove('reorder-item--over');
+      const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      const to = idx;
+      if (!Number.isInteger(from) || from === to) return;
+      reorder(from, to);
+    });
+
+    wrap.appendChild(row);
+  });
+
+  function move(from, delta) {
+    const to = from + delta;
+    if (to < 0 || to >= order.length) return;
+    reorder(from, to);
+  }
+
+  function reorder(from, to) {
+    const arr = state.resume.sectionOrder.slice();
+    // Compose full order including any non-visible sections not in this list.
+    const [moved] = arr.splice(from, 1);
+    arr.splice(to, 0, moved);
+    state.resume.sectionOrder = arr;
+    rerenderCurrent();
+    emitChange();
+  }
+
+  return wrap;
+}
+
+// ---- Dispatch -----------------------------------------------------------
+
 const SECTION_RENDERERS = {
   contact: renderContact,
   summary: renderSummary,
@@ -629,6 +707,7 @@ const SECTION_RENDERERS = {
   custom: renderCustomSections,
   appearance: renderAppearance,
   visibility: renderVisibility,
+  reorder: renderReorder,
 };
 
 // ---- Public API ---------------------------------------------------------
@@ -670,6 +749,7 @@ export function initEditor({ state, panelEl, navEl, onChange }) {
     ['publications', 'Publications'], ['memberships', 'Memberships'],
     ['references', 'References'], ['custom', 'Custom sections'],
     ['appearance', 'Appearance'], ['visibility', 'Section visibility'],
+    ['reorder', 'Section order'],
   ];
   navEl.innerHTML = '';
   for (const [key, label] of navItems) {
@@ -700,3 +780,5 @@ export function setSection(section) {
   _currentSection = section;
   if (_panelEl) renderSectionInto(_panelEl, section);
 }
+
+export function getSectionLabels() { return { ...SECTION_LABELS }; }

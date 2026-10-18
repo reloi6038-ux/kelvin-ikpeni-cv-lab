@@ -1,23 +1,22 @@
 // ---------------------------------------------------------------------------
-// Builder page controller.
-//
-// Responsibilities:
-//  - Figure out initial templateId (query → pendingTemplateId → active → default).
-//  - Load existing resume (from ?id= or kilab.activeResumeId) or start fresh.
-//  - Restore local draft from localStorage.
-//  - Initialize the editor and preview.
-//  - Wire Save (POST/PATCH) and Delete.
-//  - Debounced autosave to localStorage.
-//  - Template switching.
-//  - Export stubs (Phase 7 fills them in).
+// Builder controller.
+// Phase 6 additions:
+//  - undo/redo
+//  - resume manager (list/switch/duplicate/delete)
+//  - completion ring
+//  - template-support warnings
 // ---------------------------------------------------------------------------
 
 import { apiFetch } from './session.js';
 import { renderResumePreview } from './template-samples.js';
-import { initEditor, createEmptyResume } from './editor.js';
+import { initEditor, createEmptyResume, getSectionLabels } from './editor.js';
+import { createHistory } from './history.js';
+import {
+  listResumes, duplicateResume, deleteResume as deleteResumeById,
+  getActiveResumeId, setActiveResumeId, clearAllLocalDraftsFor,
+} from './resume-manager.js';
 
 const DRAFT_PREFIX = 'kilab.draft.';
-const ACTIVE_KEY = 'kilab.activeResumeId';
 const PENDING_TEMPLATE_KEY = 'kilab.pendingTemplateId';
 
 const els = {};
@@ -26,15 +25,28 @@ const state = {
   resumeId: null,
   isSaving: false,
   isDirty: false,
-  lastSavedAt: null,
+  history: null,
 };
+
+// Cache of templates from /api/templates: id -> template object
+const templatesById = new Map();
+// Cache of resumes from the current session: refreshed on open of manager.
+let savedResumes = [];
 
 function cacheEls() {
   els.title = document.querySelector('[data-resume-title]');
   els.templateSelect = document.querySelector('[data-template-select]');
   els.saveBtn = document.querySelector('[data-action="save"]');
   els.deleteBtn = document.querySelector('[data-action="delete"]');
+  els.resumeBtn = document.querySelector('[data-action="resumes"]');
+  els.resumeMenu = document.querySelector('[data-resume-menu]');
+  els.resumeList = document.querySelector('[data-resume-list]');
+  els.undoBtn = document.querySelector('[data-action="undo"]');
+  els.redoBtn = document.querySelector('[data-action="redo"]');
   els.statusEl = document.querySelector('[data-save-status]');
+  els.completionEl = document.querySelector('[data-completion]');
+  els.completionValueEl = document.querySelector('[data-completion-value]');
+  els.warnEl = document.querySelector('[data-template-warn]');
   els.panel = document.querySelector('[data-editor-panel]');
   els.nav = document.querySelector('[data-section-nav]');
   els.previewHost = document.querySelector('[data-preview-host]');
@@ -58,50 +70,99 @@ function toast(msg, kind = 'info') {
   toast._t = setTimeout(() => { els.toast.hidden = true; }, 3500);
 }
 
-function readPendingTemplateId() {
-  const q = new URLSearchParams(window.location.search).get('template');
-  if (q) return q;
-  try {
-    const t = localStorage.getItem(PENDING_TEMPLATE_KEY);
-    if (t) return t;
-  } catch { /* ignore */ }
-  return null;
-}
+// ---- Drafts ------------------------------------------------------------
 
-function readActiveResumeId() {
-  const q = new URLSearchParams(window.location.search).get('id');
-  if (q) return q;
-  try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
-}
-
-function draftKey() {
-  return DRAFT_PREFIX + (state.resumeId || 'new');
-}
-
+function draftKey() { return DRAFT_PREFIX + (state.resumeId || 'new'); }
 function saveDraft() {
   try { localStorage.setItem(draftKey(), JSON.stringify(state.resume)); } catch { /* ignore */ }
 }
-
 function loadDraft() {
   try {
     const raw = localStorage.getItem(draftKey());
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
-
 function clearDraft() {
   try { localStorage.removeItem(draftKey()); } catch { /* ignore */ }
 }
 
-function normalizeResume(r) {
-  const base = createEmptyResume(r.templateId || 'modern-professional');
-  return {
-    ...base,
-    ...r,
-    contact: { ...base.contact, ...(r.contact || {}) },
-    theme: { ...base.theme, ...(r.theme || {}) },
-  };
+// ---- Templates ---------------------------------------------------------
+
+function readPendingTemplateId() {
+  const q = new URLSearchParams(window.location.search).get('template');
+  if (q) return q;
+  try { return localStorage.getItem(PENDING_TEMPLATE_KEY); } catch { return null; }
 }
+
+async function loadTemplates() {
+  try {
+    const res = await fetch('/api/templates', { headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    (data.templates || []).forEach((t) => templatesById.set(t.id, t));
+    if (els.templateSelect) {
+      els.templateSelect.innerHTML = (data.templates || [])
+        .map((t) => `<option value="${t.id}">${t.name} — ${t.category}</option>`)
+        .join('');
+    }
+  } catch (err) {
+    console.error('Failed to load templates:', err);
+  }
+}
+
+// ---- Warnings ----------------------------------------------------------
+
+function checkTemplateSupport() {
+  if (!els.warnEl) return;
+  const template = templatesById.get(state.resume.templateId);
+  if (!template) { els.warnEl.hidden = true; return; }
+  const supported = new Set(template.supportedSections || []);
+  const visible = state.resume.sectionVisibility || {};
+  const missing = [];
+  for (const [key, on] of Object.entries(visible)) {
+    if (!on) continue;
+    // 'contact', 'summary', 'experience', 'education', 'skills' should always
+    // be considered supported unless explicitly omitted from the template.
+    if (['contact'].includes(key)) continue;
+    if (!supported.has(key)) {
+      const hasData = Array.isArray(state.resume[key])
+        ? state.resume[key].some((e) => Object.values(e).some((v) => v && v !== e.id))
+        : !!state.resume[key];
+      if (hasData) missing.push(key);
+    }
+  }
+  if (!missing.length) { els.warnEl.hidden = true; return; }
+  const labels = getSectionLabels();
+  els.warnEl.hidden = false;
+  els.warnEl.textContent =
+    `This template doesn't render: ${missing.map((k) => labels[k] || k).join(', ')}. ` +
+    `Switch templates or hide those sections in Section visibility.`;
+}
+
+// ---- Completion --------------------------------------------------------
+
+function computeCompletion() {
+  const r = state.resume;
+  const checks = [
+    !!r.contact?.fullName,
+    !!r.contact?.email,
+    !!r.summary && r.summary.length >= 60,
+    (r.experience || []).some((e) => e.jobTitle && e.employer),
+    (r.education || []).some((e) => e.degree || e.institution),
+    (r.skills || []).length > 0,
+  ];
+  const pct = Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  return pct;
+}
+
+function renderCompletion() {
+  if (!els.completionEl || !els.completionValueEl) return;
+  const pct = computeCompletion();
+  els.completionValueEl.textContent = `${pct}%`;
+  els.completionEl.style.setProperty('--progress', `${pct}%`);
+  els.completionEl.setAttribute('aria-label', `Resume completion: ${pct}%`);
+}
+
+// ---- Preview -----------------------------------------------------------
 
 function renderPreview() {
   if (!els.previewHost || !state.resume) return;
@@ -115,16 +176,68 @@ function renderPreview() {
   }
 }
 
+// ---- Autosave & undo snapshots ----------------------------------------
+
 let saveTimer = null;
-function scheduleSave() {
+let historyCommitTimer = null;
+
+function onResumeChanged() {
+  renderPreview();
+  renderCompletion();
+  checkTemplateSupport();
   setStatus('Unsaved changes', 'dirty');
   state.isDirty = true;
+
+  // Debounce persistence
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveDraft();
     setStatus('Draft saved locally', 'ok');
   }, 1200);
+
+  // Debounce history snapshot (~600ms of idle editing)
+  clearTimeout(historyCommitTimer);
+  historyCommitTimer = setTimeout(() => {
+    if (state.history) {
+      state.history.push(state.resume);
+      updateUndoRedoButtons();
+    }
+  }, 600);
 }
+
+function updateUndoRedoButtons() {
+  if (!state.history) return;
+  if (els.undoBtn) els.undoBtn.disabled = !state.history.canUndo();
+  if (els.redoBtn) els.redoBtn.disabled = !state.history.canRedo();
+}
+
+function applyHistorySnapshot(snapshot) {
+  if (!snapshot) return;
+  state.resume = snapshot;
+  if (els.title) els.title.value = state.resume.title || '';
+  if (els.templateSelect) els.templateSelect.value = state.resume.templateId || 'modern-professional';
+  // Re-render entire panel by swapping state.
+  document.dispatchEvent(new CustomEvent('resume:changed'));
+  renderPreview();
+  renderCompletion();
+  checkTemplateSupport();
+  updateUndoRedoButtons();
+  setStatus('Reverted — unsaved changes', 'dirty');
+  state.isDirty = true;
+}
+
+function undo() {
+  if (!state.history) return;
+  const snap = state.history.undo();
+  if (snap) applyHistorySnapshot(snap);
+}
+function redo() {
+  if (!state.history) return;
+  const snap = state.history.redo();
+  if (snap) applyHistorySnapshot(snap);
+}
+
+// ---- Save / delete -----------------------------------------------------
 
 async function manualSave() {
   if (state.isSaving || !state.resume) return;
@@ -145,11 +258,10 @@ async function manualSave() {
     }
     state.resumeId = res.resume.id;
     state.resume = { ...state.resume, id: res.resume.id };
-    try { localStorage.setItem(ACTIVE_KEY, state.resumeId); } catch { /* ignore */ }
+    setActiveResumeId(state.resumeId);
     saveDraft();
     state.isDirty = false;
     setStatus('Saved', 'ok');
-    state.lastSavedAt = new Date();
     toast('Resume saved', 'ok');
   } catch (err) {
     console.error('Save failed:', err);
@@ -161,13 +273,14 @@ async function manualSave() {
   }
 }
 
-async function deleteResume() {
+async function handleDeleteCurrent() {
   if (!state.resumeId) { toast('Nothing to delete yet.', 'info'); return; }
   if (!confirm('Delete this saved resume? Your local draft will also be cleared.')) return;
   try {
-    await apiFetch(`/api/resumes/${state.resumeId}`, { method: 'DELETE' });
+    await deleteResumeById(state.resumeId);
     clearDraft();
-    try { localStorage.removeItem(ACTIVE_KEY); } catch { /* ignore */ }
+    clearAllLocalDraftsFor(state.resumeId);
+    setActiveResumeId(null);
     state.resumeId = null;
     toast('Resume deleted.', 'ok');
     setStatus('Not saved', 'idle');
@@ -177,26 +290,125 @@ async function deleteResume() {
   }
 }
 
-async function populateTemplateSelect() {
-  if (!els.templateSelect) return;
+// ---- Resume manager UI -------------------------------------------------
+
+async function refreshSavedResumes() {
   try {
-    const res = await fetch('/api/templates', { headers: { Accept: 'application/json' } });
-    const data = await res.json();
-    const templates = data.templates || [];
-    els.templateSelect.innerHTML = templates
-      .map((t) => `<option value="${t.id}">${t.name} — ${t.category}</option>`)
-      .join('');
+    savedResumes = await listResumes();
   } catch (err) {
-    console.error('Failed to load templates:', err);
+    console.error('List resumes failed:', err);
+    savedResumes = [];
   }
+  renderResumeMenu();
+}
+
+function renderResumeMenu() {
+  if (!els.resumeList) return;
+  if (!savedResumes.length) {
+    els.resumeList.innerHTML = '<li class="resume-menu__empty">No saved resumes yet.</li>';
+    return;
+  }
+  els.resumeList.innerHTML = savedResumes.map((r) => `
+    <li class="resume-menu__item${r.id === state.resumeId ? ' resume-menu__item--active' : ''}" data-id="${r.id}">
+      <div class="resume-menu__title">${escape(r.title || 'Untitled Resume')}</div>
+      <div class="resume-menu__meta">Updated ${formatDate(r.updatedAt)}</div>
+      <div class="resume-menu__actions">
+        <button type="button" class="btn btn--ghost btn--sm" data-act="open">Open</button>
+        <button type="button" class="btn btn--ghost btn--sm" data-act="dup">Duplicate</button>
+        <button type="button" class="btn btn--ghost btn--sm" data-act="del">Delete</button>
+      </div>
+    </li>
+  `).join('');
+}
+
+function escape(s = '') {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+function formatDate(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  } catch { return iso; }
+}
+
+async function handleResumeMenuClick(e) {
+  const item = e.target.closest('[data-id]');
+  if (!item) return;
+  const id = item.dataset.id;
+  const act = e.target.dataset.act;
+  if (!act) return;
+
+  if (act === 'open') {
+    if (!confirm('Open this resume? Unsaved changes to the current one will be lost.')) return;
+    const data = await apiFetch(`/api/resumes/${id}`);
+    state.resumeId = id;
+    state.resume = normalizeResume(data.resume);
+    setActiveResumeId(id);
+    state.history = createHistory(state.resume);
+    if (els.title) els.title.value = state.resume.title;
+    if (els.templateSelect) els.templateSelect.value = state.resume.templateId;
+    initEditor({ state, panelEl: els.panel, navEl: els.nav, onChange: onResumeChanged });
+    renderPreview();
+    renderCompletion();
+    checkTemplateSupport();
+    updateUndoRedoButtons();
+    setStatus('Loaded', 'ok');
+    hideResumeMenu();
+  } else if (act === 'dup') {
+    try {
+      const copy = await duplicateResume(id);
+      toast('Duplicated: ' + copy.title, 'ok');
+      await refreshSavedResumes();
+    } catch (err) {
+      toast('Duplicate failed: ' + err.message, 'error');
+    }
+  } else if (act === 'del') {
+    if (!confirm('Delete this saved resume?')) return;
+    try {
+      await deleteResumeById(id);
+      if (id === state.resumeId) {
+        state.resumeId = null;
+        setActiveResumeId(null);
+      }
+      toast('Deleted.', 'ok');
+      await refreshSavedResumes();
+    } catch (err) {
+      toast('Delete failed: ' + err.message, 'error');
+    }
+  }
+}
+
+function toggleResumeMenu() {
+  if (!els.resumeMenu) return;
+  const isOpen = !els.resumeMenu.hidden;
+  if (isOpen) { hideResumeMenu(); return; }
+  els.resumeMenu.hidden = false;
+  refreshSavedResumes();
+}
+function hideResumeMenu() {
+  if (els.resumeMenu) els.resumeMenu.hidden = true;
+}
+
+// ---- Misc --------------------------------------------------------------
+
+function normalizeResume(r) {
+  const base = createEmptyResume(r.templateId || 'modern-professional');
+  return {
+    ...base,
+    ...r,
+    contact: { ...base.contact, ...(r.contact || {}) },
+    theme: { ...base.theme, ...(r.theme || {}) },
+  };
 }
 
 async function init() {
   cacheEls();
-  await populateTemplateSelect();
+  await loadTemplates();
 
   const pendingTpl = readPendingTemplateId();
-  const activeId = readActiveResumeId();
+  const activeId = getActiveResumeId();
 
   if (activeId) {
     state.resumeId = activeId;
@@ -209,30 +421,25 @@ async function init() {
         const res = await apiFetch(`/api/resumes/${activeId}`);
         state.resume = normalizeResume(res.resume);
         setStatus('Loaded from server', 'ok');
-      } catch (err) {
-        console.warn('Falling back to new resume:', err.message);
+      } catch {
         state.resume = createEmptyResume(pendingTpl || 'modern-professional');
         state.resumeId = null;
       }
     }
   } else {
     const draft = loadDraft();
-    if (draft) {
-      state.resume = normalizeResume(draft);
-      setStatus('Restored unsaved draft', 'ok');
-    } else {
-      state.resume = createEmptyResume(pendingTpl || 'modern-professional');
-      setStatus('Ready', 'idle');
-    }
+    state.resume = draft ? normalizeResume(draft) : createEmptyResume(pendingTpl || 'modern-professional');
+    setStatus(draft ? 'Restored unsaved draft' : 'Ready', draft ? 'ok' : 'idle');
   }
 
   if (pendingTpl) state.resume.templateId = pendingTpl;
+  state.history = createHistory(state.resume);
 
   if (els.title) {
     els.title.value = state.resume.title || 'Untitled Resume';
     els.title.addEventListener('input', (e) => {
       state.resume.title = e.target.value.slice(0, 200);
-      scheduleSave();
+      onResumeChanged();
     });
   }
 
@@ -241,43 +448,47 @@ async function init() {
     els.templateSelect.addEventListener('change', (e) => {
       state.resume.templateId = e.target.value;
       renderPreview();
-      scheduleSave();
+      checkTemplateSupport();
+      onResumeChanged();
     });
   }
 
   if (els.saveBtn) els.saveBtn.addEventListener('click', manualSave);
-  if (els.deleteBtn) els.deleteBtn.addEventListener('click', deleteResume);
+  if (els.deleteBtn) els.deleteBtn.addEventListener('click', handleDeleteCurrent);
+  if (els.resumeBtn) els.resumeBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleResumeMenu(); });
+  if (els.resumeList) els.resumeList.addEventListener('click', handleResumeMenuClick);
+  if (els.undoBtn) els.undoBtn.addEventListener('click', undo);
+  if (els.redoBtn) els.redoBtn.addEventListener('click', redo);
 
-  if (els.mobileToggle) {
-    els.mobileToggle.addEventListener('click', () => {
-      els.workspace.classList.toggle('workspace--show-preview');
-    });
-  }
-
-  initEditor({
-    state,
-    panelEl: els.panel,
-    navEl: els.nav,
-    onChange: () => {
-      renderPreview();
-      scheduleSave();
-    },
+  // Close menu on outside click
+  document.addEventListener('click', (e) => {
+    if (els.resumeMenu && !els.resumeMenu.hidden && !els.resumeMenu.contains(e.target) && e.target !== els.resumeBtn) {
+      hideResumeMenu();
+    }
   });
 
+  if (els.mobileToggle) {
+    els.mobileToggle.addEventListener('click', () => els.workspace.classList.toggle('workspace--show-preview'));
+  }
+
+  initEditor({ state, panelEl: els.panel, navEl: els.nav, onChange: onResumeChanged });
+
   renderPreview();
+  renderCompletion();
+  checkTemplateSupport();
+  updateUndoRedoButtons();
 
   window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-      e.preventDefault();
-      manualSave();
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); manualSave(); }
+    else if (mod && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    else if (mod && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+      e.preventDefault(); redo();
     }
   });
 
   window.addEventListener('beforeunload', (e) => {
-    if (state.isDirty) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
+    if (state.isDirty) { e.preventDefault(); e.returnValue = ''; }
   });
 
   try { localStorage.removeItem(PENDING_TEMPLATE_KEY); } catch { /* ignore */ }
@@ -288,6 +499,3 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
-
-export function getCurrentResume() { return state.resume; }
-export function getCurrentResumeId() { return state.resumeId; }
