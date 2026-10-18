@@ -3,21 +3,251 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Kelvin Ikpeni CV Lab</title>
-  <meta name="description" content="Build a beautiful, professional resume or CV in your browser. No sign-up required." />
+  <title>Kelvin Ikpeni CV Lab — Build a resume that opens doors</title>
+  <meta name="description" content="A premium, privacy-conscious resume and CV builder. 12+ templates, live preview, PDF and DOCX downloads. No signup required." />
+  <meta property="og:title" content="Kelvin Ikpeni CV Lab — Build a resume that opens doors" />
+  <meta property="og:description" content="A premium, privacy-conscious resume and CV builder. No signup required." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/static/img/og-home.svg" />
   <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
   <link rel="stylesheet" href="/static/css/main.css" />
+  <script defer src="/static/js/shared.js"></script>
 </head>
 <body>
-  <main class="page">
-    <h1>Kelvin Ikpeni CV Lab</h1>
-    <p>Phase 1 is running. Express is serving static HTML, static assets, and a health check.</p>
-    <ul>
-      <li><a href="/templates">Templates</a></li>
-      <li><a href="/builder">Builder</a></li>
-      <li><a href="/help">Help</a></li>
-      <li><a href="/healthz">Health check</a></li>
-    </ul>
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container hero__grid">
+        <div>
+          <span class="eyebrow">Résumés, without the friction</span>
+          <h1 class="hero__title">Build a resume <em>that opens doors.</em></h1>
+          <p class="hero__lead">
+            Twelve professionally designed templates, a live document preview, and clean PDF and DOCX downloads — no
+            account, no email verification, no surprises.
+          </p>
+          <div class="hero__actions">
+            <a class="btn btn--primary btn--lg" href="/builder">Create a resume</a>
+            <a class="btn btn--secondary btn--lg" href="/templates">Explore templates</a>
+          </div>
+          <p class="hero__hint">Free forever · No signup required · Your data stays in your browser unless you save it</p>
+        </div>
+        <div class="hero__preview" aria-hidden="true">
+          <span class="hero__badge">Preview</span>
+          <!-- Illustrative resume mockup; replaced by the real preview engine in Phase 5 -->
+          <svg viewBox="0 0 400 500" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;background:#fff;">
+            <rect x="40" y="40" width="320" height="24" rx="4" fill="#0f172a"/>
+            <rect x="40" y="76" width="220" height="10" rx="2" fill="#94a3b8"/>
+            <rect x="40" y="104" width="320" height="1" fill="#e2e8f0"/>
+            <rect x="40" y="124" width="80" height="10" rx="2" fill="#2563eb"/>
+            <rect x="40" y="146" width="320" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="160" width="300" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="174" width="280" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="200" width="80" height="10" rx="2" fill="#2563eb"/>
+            <rect x="40" y="222" width="320" height="8" rx="2" fill="#0f172a"/>
+            <rect x="40" y="236" width="180" height="6" rx="2" fill="#94a3b8"/>
+            <rect x="40" y="256" width="320" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="270" width="300" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="284" width="320" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="310" width="320" height="8" rx="2" fill="#0f172a"/>
+            <rect x="40" y="324" width="180" height="6" rx="2" fill="#94a3b8"/>
+            <rect x="40" y="344" width="320" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="358" width="280" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="372" width="320" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="398" width="80" height="10" rx="2" fill="#2563eb"/>
+            <rect x="40" y="420" width="120" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="170" y="420" width="120" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="440" width="150" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="460" width="100" height="6" rx="2" fill="#cbd5e1"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section">
+      <div class="container">
+        <div class="section__header">
+          <span class="eyebrow">Why CV Lab</span>
+          <h2>Serious about the details.</h2>
+          <p>A builder that respects your time, your design sense, and your privacy.</p>
+        </div>
+        <div class="features">
+          <article class="card">
+            <div class="card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 10v10"/></svg>
+            </div>
+            <h3 class="card__title">12 premium templates</h3>
+            <p class="card__body">From minimalist to executive, corporate to creative. Every template is fully implemented and printable.</p>
+          </article>
+          <article class="card">
+            <div class="card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>
+            </div>
+            <h3 class="card__title">Live document preview</h3>
+            <p class="card__body">Edit and see the actual page update in real time. No refresh, no guessing, no surprises at download time.</p>
+          </article>
+          <article class="card">
+            <div class="card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            </div>
+            <h3 class="card__title">PDF and DOCX downloads</h3>
+            <p class="card__body">A perfect PDF for applications, and an editable DOCX for employers who ask for it. Both without signing up.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="section section--mist">
+      <div class="container">
+        <div class="section__header">
+          <span class="eyebrow">How it works</span>
+          <h2>Three steps from blank to brilliant.</h2>
+        </div>
+        <div class="steps">
+          <div class="step">
+            <h3>Choose a template</h3>
+            <p>Browse the gallery and pick a design. Every template is production-ready, and switching later preserves your content.</p>
+          </div>
+          <div class="step">
+            <h3>Fill in your details</h3>
+            <p>Work through guided sections: contact, summary, experience, education, skills, and more. Add only what you need.</p>
+          </div>
+          <div class="step">
+            <h3>Download and apply</h3>
+            <p>Preview the final document, export a PDF, and (if you want) grab an editable DOCX. No signup required at any point.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ATS -->
+    <section class="section">
+      <div class="container split">
+        <div>
+          <span class="eyebrow">ATS-friendly by design</span>
+          <h2>Resumes that machines can read, and humans want to read.</h2>
+          <p>Applicant Tracking Systems frequently filter resumes before a human ever sees them. Our ATS templates are single-column, use real text, avoid icons in the content, and structure headings predictably — so parsers extract your details correctly.</p>
+          <ul>
+            <li>Single-column layout for maximum parser compatibility</li>
+            <li>Real, selectable text — not images or scanned images</li>
+            <li>Predictable section headings (Summary, Experience, Education, Skills)</li>
+            <li>Conservative fonts and standard date formats</li>
+          </ul>
+          <a class="btn btn--primary" href="/templates">See ATS templates</a>
+        </div>
+        <div class="split__media" aria-hidden="true">
+          <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="20" width="360" height="260" rx="12" fill="#fff" stroke="#e2e8f0"/>
+            <rect x="40" y="44" width="120" height="10" rx="2" fill="#2563eb"/>
+            <rect x="40" y="66" width="320" height="1" fill="#e2e8f0"/>
+            <rect x="40" y="80" width="60" height="8" rx="2" fill="#0f172a"/>
+            <rect x="40" y="96" width="320" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="108" width="280" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="130" width="60" height="8" rx="2" fill="#0f172a"/>
+            <rect x="40" y="146" width="320" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="158" width="240" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="180" width="60" height="8" rx="2" fill="#0f172a"/>
+            <rect x="40" y="196" width="320" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="208" width="180" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="40" y="230" width="60" height="8" rx="2" fill="#0f172a"/>
+            <rect x="40" y="246" width="320" height="6" rx="2" fill="#cbd5e1"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- Downloads -->
+    <section class="section section--mist">
+      <div class="container split">
+        <div class="split__media" aria-hidden="true">
+          <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+            <rect x="80" y="20" width="240" height="180" rx="10" fill="#fff" stroke="#e2e8f0"/>
+            <text x="200" y="60" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-weight="800" font-size="20" fill="#0f172a">PDF</text>
+            <rect x="110" y="80" width="180" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="110" y="94" width="150" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="110" y="108" width="170" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="110" y="122" width="140" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="110" y="136" width="160" height="6" rx="2" fill="#cbd5e1"/>
+            <rect x="80" y="220" width="240" height="60" rx="10" fill="#2563eb"/>
+            <text x="200" y="258" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="16" fill="#fff">Also exports DOCX</text>
+          </svg>
+        </div>
+        <div>
+          <span class="eyebrow">Both formats included</span>
+          <h2>PDF for the application. DOCX for the recruiter.</h2>
+          <p>PDF preserves the exact typography and layout you designed. DOCX is a real, editable Word document — not a renamed PDF — for the recruiters and agencies that still require it.</p>
+          <ul>
+            <li>Pixel-accurate PDF export from the browser's print engine</li>
+            <li>Genuine .docx with valid Office Open XML structure</li>
+            <li>Text remains selectable, searchable, and copyable in both</li>
+            <li>No registration, no email verification, no paywall</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- No account required -->
+    <section class="section">
+      <div class="container" style="max-width:760px;text-align:center;">
+        <span class="eyebrow">No account required</span>
+        <h2 style="font-size:var(--fs-3xl);margin:0 0 var(--space-4);">Your resume is your business.</h2>
+        <p style="font-size:var(--fs-lg);">
+          Drafts are kept in your browser. If you choose to save to the server, a cryptographically random session token protects your saved resumes — no email, no password, no third-party identity provider. Delete your data at any time from the builder.
+        </p>
+        <a class="btn btn--secondary btn--lg" href="/privacy">Read the privacy notice</a>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section section--mist">
+      <div class="container">
+        <div class="section__header">
+          <span class="eyebrow">FAQ</span>
+          <h2>Questions, answered.</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Do I need an account to use CV Lab?</summary>
+            <p>No. You can browse templates, build a resume, preview it, and download PDF and DOCX files entirely without signing up, verifying an email, or paying.</p>
+          </details>
+          <details>
+            <summary>Where is my resume stored?</summary>
+            <p>While you're editing, your work lives in your browser's local storage. If you click Save, it's stored on our server under a session token that only your browser has. The token never leaves your device unless you share your browser or delete it manually.</p>
+          </details>
+          <details>
+            <summary>What if I clear my browser data or switch devices?</summary>
+            <p>Saved resumes are tied to the session token stored in your browser. Clearing browser data or switching devices means your saved resumes won't be recoverable — download your resume first if you need to keep it.</p>
+          </details>
+          <details>
+            <summary>Are the templates really ATS-friendly?</summary>
+            <p>The templates marked ATS are designed to be: single-column, real text, predictable headings, conservative fonts. ATS compatibility also depends on the system an employer uses, so we can't guarantee an individual system will parse perfectly — but our ATS templates use the patterns that parsers handle most reliably.</p>
+          </details>
+          <details>
+            <summary>Are the downloads really free?</summary>
+            <p>Yes. Both PDF and DOCX downloads are free and do not require an account. Premium template styling is available to all users on this site — no paid tier is required to access any part of the builder today.</p>
+          </details>
+          <details>
+            <summary>Can I export to Word for editing?</summary>
+            <p>Yes. The DOCX download is a real, editable Microsoft Word document. Complex multi-column layouts may be simplified in DOCX; single-column templates translate most faithfully.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="section">
+      <div class="container">
+        <div class="cta-banner">
+          <h2>Ready when you are.</h2>
+          <p>Start with any template. Change anything later. Download without giving us your email.</p>
+          <a class="btn btn--primary btn--lg" href="/builder">Create your resume</a>
+        </div>
+      </div>
+    </section>
   </main>
 </body>
 </html>

@@ -3,15 +3,91 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Help — Kelvin Ikpeni CV Lab</title>
+  <title>Help &amp; Guides — Kelvin Ikpeni CV Lab</title>
+  <meta name="description" content="Frequently asked questions, writing tips, and ATS guidance for Kelvin Ikpeni CV Lab." />
   <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
   <link rel="stylesheet" href="/static/css/main.css" />
+  <script defer src="/static/js/shared.js"></script>
 </head>
 <body>
-  <main class="page">
-    <h1>Help</h1>
-    <p>FAQ and guidance arrive in Phase 3.</p>
-    <p><a href="/">← Home</a></p>
+  <main id="main">
+    <section class="section">
+      <div class="container">
+        <div class="section__header">
+          <span class="eyebrow">Help &amp; Guides</span>
+          <h2>Answers, guidance, and honest limits.</h2>
+          <p>Everything you need to build and download a resume — plus what to do if something goes wrong.</p>
+        </div>
+
+        <div class="prose">
+          <h2>Getting started</h2>
+          <ol>
+            <li>Open <a href="/templates">Templates</a> and pick a design. Every template is free to use on this site.</li>
+            <li>Click <strong>Use template</strong> to jump into the builder with that design applied.</li>
+            <li>Fill in each section. Your preview updates as you type; nothing is uploaded until you press Save.</li>
+            <li>When you're ready, open the Download menu and choose PDF or DOCX.</li>
+          </ol>
+
+          <h2>Frequently asked questions</h2>
+
+          <h3>Do I need an account?</h3>
+          <p>No. Browsing, editing, previewing, saving, and downloading all work without any account, email verification, or payment.</p>
+
+          <h3>Where is my data stored?</h3>
+          <p>While editing, drafts live in your browser. If you click <strong>Save</strong>, your resume is stored on our server, keyed to an anonymous session token that only your browser holds. You can delete any saved resume at any time from the builder.</p>
+
+          <h3>What happens if I switch devices?</h3>
+          <p>Saved resumes are tied to the session token stored in your browser's local storage. Switching browsers or devices means your saved resumes are not accessible there. Download your resume first if you need to move it.</p>
+
+          <h3>Can I use the same resume for multiple applications?</h3>
+          <p>Yes. Use <strong>Duplicate</strong> from the builder to copy a resume, then tailor the copy for each application. Duplicates are separate documents; changes to one don't affect the other.</p>
+
+          <h3>Are the PDF downloads free?</h3>
+          <p>Yes. Both PDF and DOCX downloads are free, with no watermark and no per-export fee.</p>
+
+          <h2>Writing tips</h2>
+
+          <h3>Lead with impact</h3>
+          <p>Every bullet should answer "so what?" Lead with a result or a number where you have one, then explain how you achieved it.</p>
+
+          <h3>Use active verbs</h3>
+          <p>Led, shipped, designed, reduced, increased, launched, mentored. Passive verbs ("was responsible for") are weaker and take more space.</p>
+
+          <h3>Quantify wherever possible</h3>
+          <p>"Reduced latency by 40%", "managed a team of 6", "saved $120k annually". Numbers make claims credible.</p>
+
+          <h3>Tailor to the role</h3>
+          <p>Mirror the vocabulary used in the job description — especially for skills that appear in the requirements. Recruiters and ATS both scan for those phrases.</p>
+
+          <h2>ATS guidance</h2>
+          <p>Applicant Tracking Systems parse resumes before a human does. To maximize compatibility:</p>
+          <ul>
+            <li>Use an <strong>ATS</strong>-marked template — single-column, real text, standard headings.</li>
+            <li>Avoid tables, text boxes, icons inside content, and images containing text.</li>
+            <li>Use standard section names: <code>Summary</code>, <code>Experience</code>, <code>Education</code>, <code>Skills</code>.</li>
+            <li>Date format: <code>Jan 2022 – Present</code> reads reliably across parsers.</li>
+            <li>Use a standard font (Inter, Arial, Calibri) — decorative fonts are sometimes ignored.</li>
+          </ul>
+
+          <h2>Troubleshooting</h2>
+
+          <h3>The Download button doesn't work</h3>
+          <p>PDF export uses your browser's print engine. Ensure your browser is up to date, and check that pop-up blocking isn't interfering with the print dialog. If the DOCX download fails, confirm you have a working internet connection — DOCX is generated on the server.</p>
+
+          <h3>My saved resume disappeared</h3>
+          <p>Saved resumes are tied to the session token in your browser. Clearing browser data or switching devices makes them inaccessible. Local drafts (autosaved) are also stored in your browser and are lost when browser data is cleared.</p>
+
+          <h3>The preview shows content differently than the PDF</h3>
+          <p>PDF export reproduces the preview exactly, including fonts and spacing, using your browser's print engine. If you see differences, try updating your browser or exporting again from a fresh tab.</p>
+
+          <h2>Contact</h2>
+          <p>This site is a personal project. If you need help, open an issue on the GitHub repository mentioned in the source footer or reach the maintainer through the contact details published there.</p>
+        </div>
+      </div>
+    </section>
   </main>
 </body>
 </html>
