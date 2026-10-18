@@ -1,10 +1,6 @@
 // ---------------------------------------------------------------------------
 // Builder controller.
-// Phase 6 additions:
-//  - undo/redo
-//  - resume manager (list/switch/duplicate/delete)
-//  - completion ring
-//  - template-support warnings
+// Phase 7 additions: download menu (PDF + DOCX), export handlers, loading UI.
 // ---------------------------------------------------------------------------
 
 import { apiFetch } from './session.js';
@@ -15,6 +11,7 @@ import {
   listResumes, duplicateResume, deleteResume as deleteResumeById,
   getActiveResumeId, setActiveResumeId, clearAllLocalDraftsFor,
 } from './resume-manager.js';
+import { exportPdf, exportDocx } from './exporter.js';
 
 const DRAFT_PREFIX = 'kilab.draft.';
 const PENDING_TEMPLATE_KEY = 'kilab.pendingTemplateId';
@@ -25,12 +22,11 @@ const state = {
   resumeId: null,
   isSaving: false,
   isDirty: false,
+  isExporting: false,
   history: null,
 };
 
-// Cache of templates from /api/templates: id -> template object
 const templatesById = new Map();
-// Cache of resumes from the current session: refreshed on open of manager.
 let savedResumes = [];
 
 function cacheEls() {
@@ -43,6 +39,8 @@ function cacheEls() {
   els.resumeList = document.querySelector('[data-resume-list]');
   els.undoBtn = document.querySelector('[data-action="undo"]');
   els.redoBtn = document.querySelector('[data-action="redo"]');
+  els.downloadBtn = document.querySelector('[data-action="download"]');
+  els.downloadMenu = document.querySelector('[data-download-menu]');
   els.statusEl = document.querySelector('[data-save-status]');
   els.completionEl = document.querySelector('[data-completion]');
   els.completionValueEl = document.querySelector('[data-completion-value]');
@@ -70,21 +68,23 @@ function toast(msg, kind = 'info') {
   toast._t = setTimeout(() => { els.toast.hidden = true; }, 3500);
 }
 
+function escape(s = '') {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+function formatDate(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+  catch { return iso; }
+}
+
 // ---- Drafts ------------------------------------------------------------
 
 function draftKey() { return DRAFT_PREFIX + (state.resumeId || 'new'); }
-function saveDraft() {
-  try { localStorage.setItem(draftKey(), JSON.stringify(state.resume)); } catch { /* ignore */ }
-}
-function loadDraft() {
-  try {
-    const raw = localStorage.getItem(draftKey());
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-function clearDraft() {
-  try { localStorage.removeItem(draftKey()); } catch { /* ignore */ }
-}
+function saveDraft() { try { localStorage.setItem(draftKey(), JSON.stringify(state.resume)); } catch { /* */ } }
+function loadDraft() { try { const r = localStorage.getItem(draftKey()); return r ? JSON.parse(r) : null; } catch { return null; } }
+function clearDraft() { try { localStorage.removeItem(draftKey()); } catch { /* */ } }
 
 // ---- Templates ---------------------------------------------------------
 
@@ -104,9 +104,7 @@ async function loadTemplates() {
         .map((t) => `<option value="${t.id}">${t.name} — ${t.category}</option>`)
         .join('');
     }
-  } catch (err) {
-    console.error('Failed to load templates:', err);
-  }
+  } catch (err) { console.error('Failed to load templates:', err); }
 }
 
 // ---- Warnings ----------------------------------------------------------
@@ -120,9 +118,7 @@ function checkTemplateSupport() {
   const missing = [];
   for (const [key, on] of Object.entries(visible)) {
     if (!on) continue;
-    // 'contact', 'summary', 'experience', 'education', 'skills' should always
-    // be considered supported unless explicitly omitted from the template.
-    if (['contact'].includes(key)) continue;
+    if (key === 'contact') continue;
     if (!supported.has(key)) {
       const hasData = Array.isArray(state.resume[key])
         ? state.resume[key].some((e) => Object.values(e).some((v) => v && v !== e.id))
@@ -150,10 +146,8 @@ function computeCompletion() {
     (r.education || []).some((e) => e.degree || e.institution),
     (r.skills || []).length > 0,
   ];
-  const pct = Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  return pct;
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
-
 function renderCompletion() {
   if (!els.completionEl || !els.completionValueEl) return;
   const pct = computeCompletion();
@@ -176,7 +170,7 @@ function renderPreview() {
   }
 }
 
-// ---- Autosave & undo snapshots ----------------------------------------
+// ---- Autosave & history -----------------------------------------------
 
 let saveTimer = null;
 let historyCommitTimer = null;
@@ -188,14 +182,12 @@ function onResumeChanged() {
   setStatus('Unsaved changes', 'dirty');
   state.isDirty = true;
 
-  // Debounce persistence
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveDraft();
     setStatus('Draft saved locally', 'ok');
   }, 1200);
 
-  // Debounce history snapshot (~600ms of idle editing)
   clearTimeout(historyCommitTimer);
   historyCommitTimer = setTimeout(() => {
     if (state.history) {
@@ -216,7 +208,6 @@ function applyHistorySnapshot(snapshot) {
   state.resume = snapshot;
   if (els.title) els.title.value = state.resume.title || '';
   if (els.templateSelect) els.templateSelect.value = state.resume.templateId || 'modern-professional';
-  // Re-render entire panel by swapping state.
   document.dispatchEvent(new CustomEvent('resume:changed'));
   renderPreview();
   renderCompletion();
@@ -225,17 +216,8 @@ function applyHistorySnapshot(snapshot) {
   setStatus('Reverted — unsaved changes', 'dirty');
   state.isDirty = true;
 }
-
-function undo() {
-  if (!state.history) return;
-  const snap = state.history.undo();
-  if (snap) applyHistorySnapshot(snap);
-}
-function redo() {
-  if (!state.history) return;
-  const snap = state.history.redo();
-  if (snap) applyHistorySnapshot(snap);
-}
+function undo() { if (state.history) { const s = state.history.undo(); if (s) applyHistorySnapshot(s); } }
+function redo() { if (state.history) { const s = state.history.redo(); if (s) applyHistorySnapshot(s); } }
 
 // ---- Save / delete -----------------------------------------------------
 
@@ -250,12 +232,10 @@ async function manualSave() {
     delete payload.createdAt; delete payload.updatedAt;
     delete payload.ownerHash; delete payload.deletedAt;
 
-    let res;
-    if (state.resumeId) {
-      res = await apiFetch(`/api/resumes/${state.resumeId}`, { method: 'PATCH', body: JSON.stringify(payload) });
-    } else {
-      res = await apiFetch('/api/resumes', { method: 'POST', body: JSON.stringify(payload) });
-    }
+    const res = state.resumeId
+      ? await apiFetch(`/api/resumes/${state.resumeId}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      : await apiFetch('/api/resumes', { method: 'POST', body: JSON.stringify(payload) });
+
     state.resumeId = res.resume.id;
     state.resume = { ...state.resume, id: res.resume.id };
     setActiveResumeId(state.resumeId);
@@ -263,6 +243,7 @@ async function manualSave() {
     state.isDirty = false;
     setStatus('Saved', 'ok');
     toast('Resume saved', 'ok');
+    updateDownloadMenuState();
   } catch (err) {
     console.error('Save failed:', err);
     setStatus('Save failed — draft kept locally', 'error');
@@ -284,21 +265,18 @@ async function handleDeleteCurrent() {
     state.resumeId = null;
     toast('Resume deleted.', 'ok');
     setStatus('Not saved', 'idle');
+    updateDownloadMenuState();
   } catch (err) {
     console.error(err);
     toast('Delete failed: ' + err.message, 'error');
   }
 }
 
-// ---- Resume manager UI -------------------------------------------------
+// ---- Resume manager ----------------------------------------------------
 
 async function refreshSavedResumes() {
-  try {
-    savedResumes = await listResumes();
-  } catch (err) {
-    console.error('List resumes failed:', err);
-    savedResumes = [];
-  }
+  try { savedResumes = await listResumes(); }
+  catch (err) { console.error('List resumes failed:', err); savedResumes = []; }
   renderResumeMenu();
 }
 
@@ -319,18 +297,6 @@ function renderResumeMenu() {
       </div>
     </li>
   `).join('');
-}
-
-function escape(s = '') {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
-}
-function formatDate(iso) {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-  } catch { return iso; }
 }
 
 async function handleResumeMenuClick(e) {
@@ -356,39 +322,79 @@ async function handleResumeMenuClick(e) {
     updateUndoRedoButtons();
     setStatus('Loaded', 'ok');
     hideResumeMenu();
+    updateDownloadMenuState();
   } else if (act === 'dup') {
     try {
       const copy = await duplicateResume(id);
       toast('Duplicated: ' + copy.title, 'ok');
       await refreshSavedResumes();
-    } catch (err) {
-      toast('Duplicate failed: ' + err.message, 'error');
-    }
+    } catch (err) { toast('Duplicate failed: ' + err.message, 'error'); }
   } else if (act === 'del') {
     if (!confirm('Delete this saved resume?')) return;
     try {
       await deleteResumeById(id);
-      if (id === state.resumeId) {
-        state.resumeId = null;
-        setActiveResumeId(null);
-      }
+      if (id === state.resumeId) { state.resumeId = null; setActiveResumeId(null); updateDownloadMenuState(); }
       toast('Deleted.', 'ok');
       await refreshSavedResumes();
-    } catch (err) {
-      toast('Delete failed: ' + err.message, 'error');
-    }
+    } catch (err) { toast('Delete failed: ' + err.message, 'error'); }
   }
 }
 
 function toggleResumeMenu() {
   if (!els.resumeMenu) return;
-  const isOpen = !els.resumeMenu.hidden;
-  if (isOpen) { hideResumeMenu(); return; }
+  if (!els.resumeMenu.hidden) { hideResumeMenu(); return; }
   els.resumeMenu.hidden = false;
   refreshSavedResumes();
 }
-function hideResumeMenu() {
-  if (els.resumeMenu) els.resumeMenu.hidden = true;
+function hideResumeMenu() { if (els.resumeMenu) els.resumeMenu.hidden = true; }
+
+// ---- Download menu -----------------------------------------------------
+
+function updateDownloadMenuState() {
+  if (!els.downloadMenu) return;
+  const docxBtn = els.downloadMenu.querySelector('[data-export="docx"]');
+  if (docxBtn) {
+    const canDocx = !!state.resumeId;
+    docxBtn.disabled = !canDocx;
+    docxBtn.title = canDocx ? 'Download as DOCX' : 'Save the resume first to enable DOCX';
+  }
+}
+
+function toggleDownloadMenu() {
+  if (!els.downloadMenu) return;
+  if (!els.downloadMenu.hidden) { hideDownloadMenu(); return; }
+  updateDownloadMenuState();
+  els.downloadMenu.hidden = false;
+}
+function hideDownloadMenu() { if (els.downloadMenu) els.downloadMenu.hidden = true; }
+
+async function handleDownloadClick(e) {
+  const btn = e.target.closest('[data-export]');
+  if (!btn) return;
+  const kind = btn.dataset.export;
+  if (state.isExporting) return;
+  state.isExporting = true;
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = kind === 'pdf' ? 'Preparing PDF…' : 'Preparing DOCX…';
+  try {
+    if (kind === 'pdf') {
+      await exportPdf(state.resume);
+      toast('Print dialog opened — choose “Save as PDF”.', 'info');
+    } else if (kind === 'docx') {
+      await exportDocx(state.resumeId);
+      toast('DOCX download started.', 'ok');
+    }
+    hideDownloadMenu();
+  } catch (err) {
+    console.error('Export failed:', err);
+    toast('Export failed: ' + err.message, 'error');
+  } finally {
+    state.isExporting = false;
+    btn.disabled = false;
+    btn.textContent = original;
+    updateDownloadMenuState();
+  }
 }
 
 // ---- Misc --------------------------------------------------------------
@@ -442,7 +448,6 @@ async function init() {
       onResumeChanged();
     });
   }
-
   if (els.templateSelect) {
     if (state.resume.templateId) els.templateSelect.value = state.resume.templateId;
     els.templateSelect.addEventListener('change', (e) => {
@@ -459,17 +464,15 @@ async function init() {
   if (els.resumeList) els.resumeList.addEventListener('click', handleResumeMenuClick);
   if (els.undoBtn) els.undoBtn.addEventListener('click', undo);
   if (els.redoBtn) els.redoBtn.addEventListener('click', redo);
+  if (els.downloadBtn) els.downloadBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleDownloadMenu(); });
+  if (els.downloadMenu) els.downloadMenu.addEventListener('click', handleDownloadClick);
 
-  // Close menu on outside click
   document.addEventListener('click', (e) => {
-    if (els.resumeMenu && !els.resumeMenu.hidden && !els.resumeMenu.contains(e.target) && e.target !== els.resumeBtn) {
-      hideResumeMenu();
-    }
+    if (els.resumeMenu && !els.resumeMenu.hidden && !els.resumeMenu.contains(e.target) && e.target !== els.resumeBtn) hideResumeMenu();
+    if (els.downloadMenu && !els.downloadMenu.hidden && !els.downloadMenu.contains(e.target) && e.target !== els.downloadBtn) hideDownloadMenu();
   });
 
-  if (els.mobileToggle) {
-    els.mobileToggle.addEventListener('click', () => els.workspace.classList.toggle('workspace--show-preview'));
-  }
+  if (els.mobileToggle) els.mobileToggle.addEventListener('click', () => els.workspace.classList.toggle('workspace--show-preview'));
 
   initEditor({ state, panelEl: els.panel, navEl: els.nav, onChange: onResumeChanged });
 
@@ -477,25 +480,18 @@ async function init() {
   renderCompletion();
   checkTemplateSupport();
   updateUndoRedoButtons();
+  updateDownloadMenuState();
 
   window.addEventListener('keydown', (e) => {
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); manualSave(); }
     else if (mod && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
-    else if (mod && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
-      e.preventDefault(); redo();
-    }
+    else if (mod && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); }
   });
 
-  window.addEventListener('beforeunload', (e) => {
-    if (state.isDirty) { e.preventDefault(); e.returnValue = ''; }
-  });
-
-  try { localStorage.removeItem(PENDING_TEMPLATE_KEY); } catch { /* ignore */ }
+  window.addEventListener('beforeunload', (e) => { if (state.isDirty) { e.preventDefault(); e.returnValue = ''; } });
+  try { localStorage.removeItem(PENDING_TEMPLATE_KEY); } catch { /* */ }
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();

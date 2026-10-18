@@ -31,12 +31,40 @@
           </label>
         </div>
         <div class="toolbar__right">
+          <button class="icon-btn" type="button" data-action="undo" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" disabled>↺</button>
+          <button class="icon-btn" type="button" data-action="redo" aria-label="Redo (Ctrl+Shift+Z)" title="Redo (Ctrl+Shift+Z)" disabled>↻</button>
+          <div class="completion" data-completion title="Resume completion" aria-label="Resume completion">
+            <span class="completion__ring"></span>
+            <span class="completion__value" data-completion-value>0%</span>
+          </div>
           <span class="save-status" data-save-status data-kind="idle">Ready</span>
+          <div class="menu-wrap">
+            <button class="btn btn--ghost" type="button" data-action="resumes" aria-haspopup="true" aria-controls="resume-menu">My resumes ▾</button>
+            <div class="resume-menu" id="resume-menu" data-resume-menu hidden>
+              <header class="resume-menu__head">Saved resumes</header>
+              <ul class="resume-menu__list" data-resume-list></ul>
+            </div>
+          </div>
+          <div class="menu-wrap">
+            <button class="btn btn--secondary" type="button" data-action="download" aria-haspopup="true" aria-controls="download-menu">Download ▾</button>
+            <div class="download-menu" id="download-menu" data-download-menu hidden>
+              <button type="button" class="download-menu__item" data-export="pdf">
+                <span class="download-menu__title">PDF</span>
+                <span class="download-menu__hint">Prints exactly as you see it.</span>
+              </button>
+              <button type="button" class="download-menu__item" data-export="docx">
+                <span class="download-menu__title">DOCX</span>
+                <span class="download-menu__hint">Editable Word document.</span>
+              </button>
+            </div>
+          </div>
           <button class="btn btn--ghost" type="button" data-action="delete" title="Delete saved resume">Delete</button>
           <button class="btn btn--primary" type="button" data-action="save">Save</button>
           <button class="btn btn--secondary" type="button" data-mobile-toggle>Preview</button>
         </div>
       </div>
+
+      <div class="template-warn" data-template-warn hidden></div>
 
       <div class="panes">
         <aside class="pane pane--editor" aria-label="Editor">

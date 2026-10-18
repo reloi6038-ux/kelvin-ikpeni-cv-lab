@@ -24,12 +24,39 @@ export function getSessionToken() {
     }
     return t;
   } catch {
-    // localStorage blocked (private mode with strict settings). Fall back to
-    // an in-memory token for this page session — the user can still edit and
-    // download, but saving across reloads won't work.
     if (!getSessionToken._mem) getSessionToken._mem = generateToken();
     return getSessionToken._mem;
   }
+}
+
+// Generate a fresh token and store it. The old token's resumes become
+// inaccessible from this browser; the server keeps them soft-deleted or
+// orphaned until the operator purges.
+export function rotateSessionToken() {
+  const t = generateToken();
+  try { localStorage.setItem(SESSION_KEY, t); }
+  catch { getSessionToken._mem = t; }
+  return t;
+}
+
+// Clear the token entirely. Next getSessionToken() call will generate a new
+// one. Use for "delete my data" flows after server-side deletion succeeds.
+export function clearSessionToken() {
+  try { localStorage.removeItem(SESSION_KEY); }
+  catch { /* ignore */ }
+  delete getSessionToken._mem;
+}
+
+// Convenience: wipe every kilab.* entry from localStorage.
+export function clearAllLocalKilabKeys() {
+  try {
+    const remove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('kilab.')) remove.push(k);
+    }
+    remove.forEach((k) => localStorage.removeItem(k));
+  } catch { /* ignore */ }
 }
 
 export async function apiFetch(path, options = {}) {

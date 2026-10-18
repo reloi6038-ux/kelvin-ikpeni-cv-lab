@@ -800,3 +800,70 @@ code { font-family: var(--font-mono); background: var(--surface-3); padding: 2px
 .reorder-item--over { border-color: var(--color-signal); box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
 .reorder-item__handle { color: var(--color-muted); font-size: 14px; letter-spacing: -2px; }
 .reorder-item__label { font-size: var(--fs-sm); color: var(--color-ink); font-weight: var(--fw-medium); }
+
+
+/* ==========================================================================
+   Phase 7 — Download menu
+   ========================================================================== */
+.download-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 260px;
+  background: var(--surface-1);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 40;
+  padding: var(--space-2);
+}
+.download-menu__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+}
+.download-menu__item:hover:not(:disabled) { background: var(--surface-3); }
+.download-menu__item:disabled { opacity: 0.5; cursor: not-allowed; }
+.download-menu__title { font-weight: var(--fw-semibold); color: var(--color-ink); font-size: var(--fs-sm); }
+.download-menu__hint { font-size: var(--fs-xs); color: var(--color-muted); }
+
+
+/* ==========================================================================
+   Phase 8 — Privacy danger zone
+   ========================================================================== */
+.danger-zone {
+  margin: var(--space-8) 0 var(--space-6);
+  padding: var(--space-6);
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  border-radius: var(--radius-lg);
+}
+[data-theme="dark"] .danger-zone {
+  border-color: rgba(220,38,38,0.4);
+  background: rgba(127,29,29,0.15);
+}
+.btn--danger {
+  background: var(--color-danger);
+  color: #ffffff;
+  border-color: transparent;
+}
+.btn--danger:hover { background: #b91c1c; color: #ffffff; }
+.btn--danger:disabled { opacity: 0.6; cursor: not-allowed; }
+.danger-status {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+}
+.danger-status[data-kind="ok"]   { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.danger-status[data-kind="warn"] { background: #fef3c7; color: #78350f; border: 1px solid #fcd34d; }
+[data-theme="dark"] .danger-status[data-kind="ok"]   { background: rgba(16,185,129,0.15); color: #6ee7b7; border-color: rgba(16,185,129,0.4); }
+[data-theme="dark"] .danger-status[data-kind="warn"] { background: rgba(245,158,11,0.15); color: #fcd34d; border-color: rgba(245,158,11,0.4); }
