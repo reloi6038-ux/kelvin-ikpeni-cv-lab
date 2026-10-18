@@ -1,0 +1,13 @@
+/* Phase 1 placeholder — the full design system arrives in Phase 3. */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  background: #f7f7fb;
+  color: #111827;
+  line-height: 1.55;
+}
+.page { max-width: 720px; margin: 4rem auto; padding: 0 1.25rem; }
+a { color: #2b5cff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1 { font-size: 2rem; margin-top: 0; }
