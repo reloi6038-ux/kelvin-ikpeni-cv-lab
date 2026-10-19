@@ -1,9 +1,8 @@
 // ---------------------------------------------------------------------------
 // Editor: form for every resume section + section reordering + theme reset.
-// Mutations dispatch 'resume:changed' on document.
-// Mutations that should be captured for undo dispatch 'resume:mutation' with
-// a `commit` timestamp; the builder decides when to snapshot.
 // ---------------------------------------------------------------------------
+
+import { getSampleResumeForBuilder } from './template-samples.js';
 
 const SECTION_LABELS = {
   contact: 'Contact',
@@ -34,31 +33,9 @@ export function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+// Now returns the populated sample instead of an empty shell.
 export function createEmptyResume(templateId = 'modern-professional') {
-  return {
-    title: 'Untitled Resume',
-    templateId,
-    contact: {
-      fullName: '', title: '', email: '', phone: '',
-      city: '', country: '', website: '', linkedin: '', portfolio: '', photoUrl: '',
-    },
-    summary: '',
-    experience: [], education: [], skills: [], projects: [],
-    certifications: [], languages: [], awards: [], volunteer: [],
-    publications: [], memberships: [], references: [], customSections: [],
-    theme: { ...TEMPLATE_DEFAULT_THEME },
-    sectionOrder: [
-      'summary', 'experience', 'education', 'skills', 'projects',
-      'certifications', 'languages', 'awards', 'volunteer',
-      'publications', 'memberships', 'references', 'custom',
-    ],
-    sectionVisibility: {
-      summary: true, experience: true, education: true, skills: true,
-      projects: true, certifications: true, languages: true, awards: true,
-      volunteer: true, publications: true, memberships: true,
-      references: true, custom: true,
-    },
-  };
+  return getSampleResumeForBuilder(templateId);
 }
 
 // ---- DOM helpers --------------------------------------------------------
@@ -110,7 +87,7 @@ function textarea(value, opts = {}) {
   return t;
 }
 
-// ---- Renderers ----------------------------------------------------------
+// ---- Section renderers --------------------------------------------------
 
 function renderContact(state) {
   const c = state.resume.contact;
@@ -583,7 +560,6 @@ function renderAppearance(state) {
   spacing.addEventListener('input', (e) => { t.spacing = parseFloat(e.target.value); emitChange(); });
   grid.appendChild(field(`Line spacing (${(t.spacing || 1).toFixed(2)}×)`, spacing));
 
-  // Reset theme button
   const reset = el('button', {
     type: 'button', class: 'btn btn--secondary', style: 'grid-column:1 / -1;justify-self:start;',
     onclick: () => {
@@ -645,7 +621,6 @@ function renderReorder(state) {
     row.appendChild(up);
     row.appendChild(down);
 
-    // Drag events
     row.addEventListener('dragstart', (e) => {
       row.classList.add('reorder-item--dragging');
       e.dataTransfer.effectAllowed = 'move';
@@ -677,7 +652,6 @@ function renderReorder(state) {
 
   function reorder(from, to) {
     const arr = state.resume.sectionOrder.slice();
-    // Compose full order including any non-visible sections not in this list.
     const [moved] = arr.splice(from, 1);
     arr.splice(to, 0, moved);
     state.resume.sectionOrder = arr;
@@ -687,8 +661,6 @@ function renderReorder(state) {
 
   return wrap;
 }
-
-// ---- Dispatch -----------------------------------------------------------
 
 const SECTION_RENDERERS = {
   contact: renderContact,

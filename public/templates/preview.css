@@ -3,7 +3,6 @@
    - .doc            : base document (A4-ish page)
    - .doc--<id>      : per-template overrides
    - .doc--thumb     : compact variant for gallery cards
-   Used by both the gallery and the builder preview.
    ========================================================================== */
 
 .doc {
@@ -187,7 +186,213 @@
 .doc--international-adaptable .doc-skills { grid-template-columns: repeat(3, 1fr); }
 .doc--international-adaptable .doc-entry__meta { font-style: italic; }
 
-/* -------- Thumbnail mode -------- */
+/* -------- startup-engineer -------- */
+.doc--startup-engineer { --doc-accent: #7c3aed; --doc-font: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+.doc--startup-engineer .doc-name { font-size: 24pt; letter-spacing: -0.8px; }
+.doc--startup-engineer .doc-title { color: var(--doc-accent); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5pt; letter-spacing: 0.5px; }
+.doc--startup-engineer .doc-h2 {
+  color: var(--doc-accent);
+  border-bottom: 0;
+  border-left: 3px solid var(--doc-accent);
+  padding-left: 8px;
+  letter-spacing: 2px;
+  font-size: 9.5pt;
+}
+.doc--startup-engineer .doc-entry__title { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 500; }
+.doc--startup-engineer .doc-skills { grid-template-columns: repeat(2, 1fr); gap: 2px 16px; }
+.doc--startup-engineer .doc-skill__level { display: none; }
+
+/* -------- fullstack-developer -------- */
+.doc--fullstack-developer { --doc-accent: #0891b2; }
+.doc--fullstack-developer .doc-header { border-bottom: 3px solid var(--doc-accent); padding-bottom: 10px; }
+.doc--fullstack-developer .doc-name { color: #0f172a; }
+.doc--fullstack-developer .doc-title { color: var(--doc-accent); font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; font-size: 9.5pt; }
+.doc--fullstack-developer .doc-h2 { color: #0f172a; border-bottom: 1px solid var(--doc-accent); }
+.doc--fullstack-developer .doc-skills { grid-template-columns: repeat(3, 1fr); gap: 3px 20px; }
+.doc--fullstack-developer .doc-skill__level { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 8.5pt; }
+
+/* -------- devops-sre -------- */
+.doc--devops-sre { --doc-accent: #16a34a; }
+.doc--devops-sre .doc-header {
+  background: #111827;
+  color: #f8fafc;
+  margin: -40px -40px 18px;
+  padding: 26px 40px;
+}
+.doc--devops-sre .doc-name { color: #ffffff; letter-spacing: -0.5px; }
+.doc--devops-sre .doc-title { color: #86efac; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10pt; }
+.doc--devops-sre .doc-contact { color: #cbd5e1; }
+.doc--devops-sre .doc-h2 { color: #111827; border-bottom: 2px solid #16a34a; letter-spacing: 2px; }
+.doc--devops-sre .doc-skills { grid-template-columns: repeat(2, 1fr); }
+.doc--devops-sre .doc-entry__title { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 500; }
+
+/* -------- data-scientist -------- */
+.doc--data-scientist { --doc-accent: #9333ea; }
+.doc--data-scientist .doc-name { font-size: 22pt; font-weight: 500; }
+.doc--data-scientist .doc-h2 {
+  color: var(--doc-accent);
+  font-size: 11pt;
+  letter-spacing: 2px;
+  border-bottom: 2px dotted var(--doc-accent);
+}
+.doc--data-scientist .doc-entry__title { font-weight: 500; }
+.doc--data-scientist .doc-skills { grid-template-columns: repeat(3, 1fr); }
+
+/* -------- editorial-designer -------- */
+.doc--editorial-designer { --doc-accent: #be123c; --doc-font: 'Georgia', 'Times New Roman', serif; }
+.doc--editorial-designer .doc-header { text-align: left; border-bottom: 3px double #0f172a; padding-bottom: 12px; }
+.doc--editorial-designer .doc-name { font-size: 34pt; font-weight: 800; letter-spacing: -2px; line-height: 0.95; }
+.doc--editorial-designer .doc-title { font-style: italic; font-size: 13pt; color: var(--doc-accent); font-weight: 400; }
+.doc--editorial-designer .doc-h2 { text-transform: none; font-style: italic; letter-spacing: 0; color: var(--doc-accent); border-bottom: 1px solid #0f172a; font-size: 13pt; }
+.doc--editorial-designer .doc-p { text-align: justify; }
+
+/* -------- portfolio-lead -------- */
+.doc--portfolio-lead { --doc-accent: #ea580c; --doc-pad: 34px; }
+.doc--portfolio-lead .doc-name { font-size: 28pt; font-weight: 800; text-transform: uppercase; letter-spacing: -1px; }
+.doc--portfolio-lead .doc-title { color: var(--doc-accent); font-size: 11pt; letter-spacing: 3px; text-transform: uppercase; }
+.doc--portfolio-lead .doc-h2 {
+  background: var(--doc-accent);
+  color: #ffffff;
+  padding: 4px 10px;
+  border-bottom: 0;
+  letter-spacing: 3px;
+  font-size: 9.5pt;
+}
+.doc--portfolio-lead .doc-entry { padding-left: 10px; border-left: 2px solid var(--doc-accent); }
+
+/* -------- visual-storyteller -------- */
+.doc--visual-storyteller { --doc-accent: #0d9488; }
+.doc--visual-storyteller .doc-header {
+  background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+  color: #ffffff;
+  margin: -40px -40px 22px;
+  padding: 34px 40px;
+}
+.doc--visual-storyteller .doc-name { color: #ffffff; font-size: 30pt; letter-spacing: -1px; }
+.doc--visual-storyteller .doc-title { color: #ccfbf1; font-size: 12pt; letter-spacing: 2px; text-transform: uppercase; }
+.doc--visual-storyteller .doc-contact { color: #ccfbf1; }
+.doc--visual-storyteller .doc-h2 { color: #0d9488; border-bottom: 2px solid #14b8a6; letter-spacing: 3px; }
+
+/* -------- consultant-case -------- */
+.doc--consultant-case { --doc-accent: #1e3a8a; --doc-font: 'Georgia', 'Times New Roman', serif; }
+.doc--consultant-case .doc-header { text-align: center; border-top: 4px solid var(--doc-accent); border-bottom: 1px solid var(--doc-accent); padding: 14px 0; }
+.doc--consultant-case .doc-header__text { align-items: center; }
+.doc--consultant-case .doc-name { font-size: 22pt; letter-spacing: 0; }
+.doc--consultant-case .doc-title { font-style: italic; color: #1e3a8a; font-weight: 400; }
+.doc--consultant-case .doc-h2 { text-align: center; font-style: italic; text-transform: none; letter-spacing: 0.5px; border-bottom: 0; border-top: 1px solid var(--doc-line); padding-top: 6px; }
+
+/* -------- product-manager -------- */
+.doc--product-manager { --doc-accent: #c2410c; }
+.doc--product-manager .doc-name { font-size: 26pt; font-weight: 800; }
+.doc--product-manager .doc-title { color: var(--doc-accent); font-weight: 600; letter-spacing: 1px; }
+.doc--product-manager .doc-h2 {
+  color: var(--doc-accent);
+  border-bottom: 2px solid var(--doc-accent);
+  letter-spacing: 2px;
+  font-size: 10pt;
+}
+.doc--product-manager .doc-skills { grid-template-columns: repeat(2, 1fr); }
+.doc--product-manager .doc-skill__level { color: var(--doc-accent); font-weight: 600; }
+
+/* -------- chief-executive -------- */
+.doc--chief-executive { --doc-accent: #1e293b; --doc-font: 'Georgia', 'Times New Roman', serif; --doc-pad: 48px; }
+.doc--chief-executive .doc-header { text-align: center; padding-bottom: 16px; border-bottom: 1px solid #1e293b; }
+.doc--chief-executive .doc-header__text { align-items: center; }
+.doc--chief-executive .doc-name { font-size: 24pt; font-weight: 400; letter-spacing: 4px; text-transform: uppercase; }
+.doc--chief-executive .doc-title { color: #64748b; font-size: 10.5pt; letter-spacing: 3px; text-transform: uppercase; font-weight: 400; }
+.doc--chief-executive .doc-h2 { text-align: center; font-weight: 400; letter-spacing: 4px; text-transform: uppercase; border-bottom: 1px solid #1e293b; font-size: 9.5pt; }
+
+/* -------- director-leadership -------- */
+.doc--director-leadership { --doc-accent: #7c2d12; --doc-font: 'Georgia', 'Times New Roman', serif; }
+.doc--director-leadership .doc-name { font-size: 26pt; letter-spacing: -1px; }
+.doc--director-leadership .doc-title { color: var(--doc-accent); text-transform: uppercase; letter-spacing: 3px; font-size: 10pt; font-weight: 600; }
+.doc--director-leadership .doc-h2 { color: var(--doc-accent); text-transform: uppercase; letter-spacing: 3px; border-bottom: 1px solid var(--doc-accent); font-size: 9.5pt; }
+
+/* -------- research-scientist -------- */
+.doc--research-scientist { --doc-accent: #0f172a; --doc-font: 'Georgia', 'Times New Roman', serif; }
+.doc--research-scientist .doc-header { text-align: center; padding-bottom: 10px; }
+.doc--research-scientist .doc-header__text { align-items: center; }
+.doc--research-scientist .doc-name { font-size: 22pt; font-weight: 400; letter-spacing: 0; }
+.doc--research-scientist .doc-title { font-style: italic; color: #64748b; font-weight: 400; }
+.doc--research-scientist .doc-h2 { text-transform: uppercase; letter-spacing: 3px; font-size: 9.5pt; text-align: left; border-bottom: 1px solid #94a3b8; }
+.doc--research-scientist .doc-p { text-align: justify; }
+
+/* -------- phd-candidate -------- */
+.doc--phd-candidate { --doc-accent: #334155; --doc-font: 'Georgia', 'Times New Roman', serif; }
+.doc--phd-candidate .doc-name { font-size: 20pt; font-weight: 500; }
+.doc--phd-candidate .doc-title { font-style: italic; color: #475569; font-weight: 400; font-size: 11pt; }
+.doc--phd-candidate .doc-h2 { font-variant: small-caps; letter-spacing: 1px; border-bottom: 1px solid #cbd5e1; font-size: 10pt; color: #0f172a; }
+.doc--phd-candidate .doc-p { text-align: justify; }
+
+/* -------- ngo-program -------- */
+.doc--ngo-program { --doc-accent: #047857; }
+.doc--ngo-program .doc-header { border-bottom: 3px solid #047857; padding-bottom: 12px; }
+.doc--ngo-program .doc-name { color: #047857; }
+.doc--ngo-program .doc-title { color: #065f46; font-style: italic; font-weight: 500; }
+.doc--ngo-program .doc-h2 { color: #047857; border-bottom: 1px solid #a7f3d0; letter-spacing: 1.5px; }
+.doc--ngo-program .doc-skills { grid-template-columns: repeat(2, 1fr); }
+
+/* -------- government-service -------- */
+.doc--government-service { --doc-accent: #1e293b; --doc-font: 'Times New Roman', 'Georgia', serif; }
+.doc--government-service .doc-header { border-bottom: 1px solid #1e293b; padding-bottom: 10px; }
+.doc--government-service .doc-name { font-size: 18pt; letter-spacing: 0; font-weight: 700; }
+.doc--government-service .doc-title { color: #1e293b; font-weight: 400; }
+.doc--government-service .doc-h2 { color: #1e293b; border-bottom: 1px solid #1e293b; letter-spacing: 1px; text-transform: uppercase; font-size: 10pt; }
+.doc--government-service .doc-p { text-align: justify; }
+
+/* -------- social-worker -------- */
+.doc--social-worker { --doc-accent: #9333ea; }
+.doc--social-worker .doc-header { border-left: 6px solid #9333ea; padding-left: 16px; }
+.doc--social-worker .doc-name { color: #4c1d95; }
+.doc--social-worker .doc-title { color: #9333ea; font-weight: 600; letter-spacing: 1px; }
+.doc--social-worker .doc-h2 { color: #4c1d95; border-bottom: 1px solid #ddd6fe; letter-spacing: 1.5px; }
+
+/* -------- medical-professional -------- */
+.doc--medical-professional { --doc-accent: #0369a1; --doc-font: 'Georgia', 'Times New Roman', serif; }
+.doc--medical-professional .doc-header { border-bottom: 2px solid #0369a1; padding-bottom: 12px; }
+.doc--medical-professional .doc-name { color: #0369a1; letter-spacing: -0.5px; }
+.doc--medical-professional .doc-title { color: #0c4a6e; font-size: 11pt; font-weight: 500; }
+.doc--medical-professional .doc-h2 { color: #0369a1; font-size: 10.5pt; letter-spacing: 2px; border-bottom: 1px solid #bae6fd; }
+.doc--medical-professional .doc-skills { grid-template-columns: repeat(2, 1fr); }
+
+/* -------- clinical-researcher -------- */
+.doc--clinical-researcher { --doc-accent: #0f766e; --doc-font: 'Georgia', 'Times New Roman', serif; }
+.doc--clinical-researcher .doc-name { font-size: 21pt; font-weight: 400; }
+.doc--clinical-researcher .doc-title { color: var(--doc-accent); font-style: italic; font-weight: 400; }
+.doc--clinical-researcher .doc-h2 { color: var(--doc-accent); border-bottom: 1px solid #99f6e4; letter-spacing: 2px; font-size: 9.5pt; text-transform: uppercase; }
+.doc--clinical-researcher .doc-p { text-align: justify; }
+
+/* -------- global-mobility -------- */
+.doc--global-mobility { --doc-accent: #2563eb; --doc-font: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+.doc--global-mobility .doc-name { color: #1e3a8a; }
+.doc--global-mobility .doc-title { color: var(--doc-accent); letter-spacing: 2px; font-size: 10.5pt; }
+.doc--global-mobility .doc-h2 { color: #1e3a8a; text-transform: none; font-size: 12pt; letter-spacing: 0; border-bottom: 1px solid #bfdbfe; }
+.doc--global-mobility .doc-entry__meta { font-style: italic; color: #1e3a8a; }
+.doc--global-mobility .doc-skills { grid-template-columns: repeat(3, 1fr); }
+
+/* -------- career-changer -------- */
+.doc--career-changer { --doc-accent: #ca8a04; }
+.doc--career-changer .doc-header { text-align: center; border-bottom: 2px solid #ca8a04; padding-bottom: 12px; }
+.doc--career-changer .doc-header__text { align-items: center; }
+.doc--career-changer .doc-name { font-size: 24pt; letter-spacing: -0.5px; }
+.doc--career-changer .doc-title { color: #ca8a04; font-weight: 700; letter-spacing: 2px; font-size: 10pt; }
+.doc--career-changer .doc-h2 { text-align: center; color: #ca8a04; letter-spacing: 3px; border-bottom: 0; font-size: 10pt; }
+
+/* -------- recent-graduate-ats -------- */
+.doc--recent-graduate-ats { --doc-accent: #000000; --doc-font: 'Arial', 'Helvetica', 'Inter', sans-serif; }
+.doc--recent-graduate-ats .doc-header { text-align: center; border-bottom: 1px solid #000000; padding-bottom: 8px; }
+.doc--recent-graduate-ats .doc-header__text { align-items: center; }
+.doc--recent-graduate-ats .doc-name { font-size: 18pt; font-weight: 700; letter-spacing: 0; color: #000000; }
+.doc--recent-graduate-ats .doc-title { color: #000000; font-weight: 400; font-size: 11pt; }
+.doc--recent-graduate-ats .doc-contact { color: #000000; font-size: 9.5pt; }
+.doc--recent-graduate-ats .doc-h2 { color: #000000; border-bottom: 1px solid #000000; letter-spacing: 1.5px; font-size: 10pt; text-transform: uppercase; }
+.doc--recent-graduate-ats .doc-p, 
+.doc--recent-graduate-ats .doc-bullets li,
+.doc--recent-graduate-ats .doc-skills li { color: #000000; }
+.doc--recent-graduate-ats .doc-skills { grid-template-columns: repeat(2, 1fr); }
+.doc--recent-graduate-ats .doc-skills li { justify-content: flex-start; gap: 8px; }
+
+/* -------- Thumbnail mode (gallery cards) -------- */
 .doc--thumb {
   --doc-pad: 22px; --doc-fs: 6.2pt;
   max-width: 100%; border-radius: 8px; overflow: hidden;
@@ -208,3 +413,8 @@
 .doc--thumb.doc--creative-terracotta { --doc-pad: 14px 14px 14px 80px; }
 .doc--thumb.doc--creative-terracotta::before { width: 66px; }
 .doc--thumb.doc--corporate-navy .doc-header { margin: -22px -22px 12px; padding: 14px 22px; }
+.doc--thumb.doc--editorial-designer .doc-name { font-size: 18pt; }
+.doc--thumb.doc--portfolio-lead .doc-name { font-size: 16pt; }
+.doc--thumb.doc--visual-storyteller .doc-name { font-size: 16pt; }
+.doc--thumb.doc--chief-executive .doc-name { font-size: 13pt; letter-spacing: 2px; }
+.doc--thumb.doc--government-service .doc-name { font-size: 12pt; }

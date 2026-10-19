@@ -5,14 +5,12 @@
 // - renderResumePreview(target, resume, templateId, supportedSections):
 //     Renders a `.doc.doc--<templateId>` element. If `supportedSections` is
 //     provided (from /api/templates), sections not in the list are hidden.
-//     This keeps the preview in agreement with the builder's warning bar and
-//     with the exported PDF and DOCX.
-//
-// All values are HTML-escaped before injection.
+// - getSampleResumeForBuilder(templateId):
+//     Returns a deep clone of SAMPLE_RESUME for use as a starting draft.
 // ---------------------------------------------------------------------------
 
 export const SAMPLE_RESUME = {
-  title: 'Sample Resume',
+  title: 'Amara Okafor - Resume',
   templateId: 'modern-professional',
   contact: {
     fullName: 'Amara Okafor',
@@ -115,12 +113,13 @@ export const SAMPLE_RESUME = {
   sectionOrder: [
     'summary', 'experience', 'education', 'skills',
     'projects', 'certifications', 'languages', 'awards',
+    'volunteer', 'publications', 'memberships', 'references', 'custom'
   ],
   sectionVisibility: {
     summary: true, experience: true, education: true, skills: true,
     projects: true, certifications: true, languages: true, awards: true,
-    volunteer: false, publications: false, memberships: false,
-    references: false, custom: false,
+    volunteer: true, publications: true, memberships: true,
+    references: true, custom: true,
   },
 };
 
@@ -371,4 +370,24 @@ export function renderResumePreview(target, resume = SAMPLE_RESUME, templateId =
 
   target.innerHTML = html;
   return target.firstElementChild;
+}
+
+// Factory to generate a fresh, editable copy of the sample resume.
+// Used by the builder to pre-fill a new resume.
+export function getSampleResumeForBuilder(templateId = 'modern-professional') {
+  // Deep clone the SAMPLE_RESUME so user edits don't mutate the original.
+  const clone = JSON.parse(JSON.stringify(SAMPLE_RESUME));
+  clone.templateId = templateId;
+  clone.title = 'Amara Okafor - Resume';
+  
+  // Ensure sectionOrder and visibility default to showing everything
+  // the sample data supports, so the preview looks complete immediately.
+  clone.sectionVisibility = {
+    summary: true, experience: true, education: true, skills: true,
+    projects: true, certifications: true, languages: true, awards: true,
+    volunteer: true, publications: true, memberships: true,
+    references: true, custom: true,
+  };
+  
+  return clone;
 }
