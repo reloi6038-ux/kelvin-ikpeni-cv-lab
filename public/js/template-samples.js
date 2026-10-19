@@ -1,15 +1,14 @@
 // ---------------------------------------------------------------------------
 // Sample resume data + a shared resume-preview renderer.
 //
-// - SAMPLE_RESUME: fictional candidate, same for every template so the gallery
-//   compares templates on identical content.
-// - renderResumePreview(target, resume, templateId): builds a DOM tree with a
-//   .doc.doc--<templateId> wrapper. The per-template CSS lives in
-//   public/templates/preview.css. Phase 5's editor reuses this same function,
-//   so previews and the live editor are guaranteed to match.
+// - SAMPLE_RESUME: fictional candidate used by the gallery.
+// - renderResumePreview(target, resume, templateId, supportedSections):
+//     Renders a `.doc.doc--<templateId>` element. If `supportedSections` is
+//     provided (from /api/templates), sections not in the list are hidden.
+//     This keeps the preview in agreement with the builder's warning bar and
+//     with the exported PDF and DOCX.
 //
-// All values are HTML-escaped before injection. User-provided resume content
-// in Phase 5 will flow through the same escaping path.
+// All values are HTML-escaped before injection.
 // ---------------------------------------------------------------------------
 
 export const SAMPLE_RESUME = {
@@ -143,16 +142,16 @@ function renderDateRange(start, end, isCurrent) {
   return s || e || '';
 }
 
-function sectionSummary(resume, visible) {
-  if (!visible('summary') || !resume.summary) return '';
+function sectionSummary(resume) {
+  if (!resume.summary) return '';
   return `<section class="doc-section">
     <h2 class="doc-h2">Summary</h2>
     <p class="doc-p">${escapeHtml(resume.summary)}</p>
   </section>`;
 }
 
-function sectionExperience(resume, visible) {
-  if (!visible('experience') || !Array.isArray(resume.experience) || !resume.experience.length) return '';
+function sectionExperience(resume) {
+  if (!Array.isArray(resume.experience) || !resume.experience.length) return '';
   const items = resume.experience.map((e) => {
     const head = `
       <div class="doc-entry__head">
@@ -171,8 +170,8 @@ function sectionExperience(resume, visible) {
   return `<section class="doc-section"><h2 class="doc-h2">Experience</h2>${items}</section>`;
 }
 
-function sectionEducation(resume, visible) {
-  if (!visible('education') || !Array.isArray(resume.education) || !resume.education.length) return '';
+function sectionEducation(resume) {
+  if (!Array.isArray(resume.education) || !resume.education.length) return '';
   const items = resume.education.map((e) => {
     const titleParts = [e.degree, e.field].filter(Boolean).join(', ');
     const inst = e.institution ? ` — ${escapeHtml(e.institution)}` : '';
@@ -187,8 +186,8 @@ function sectionEducation(resume, visible) {
   return `<section class="doc-section"><h2 class="doc-h2">Education</h2>${items}</section>`;
 }
 
-function sectionSkills(resume, visible) {
-  if (!visible('skills') || !Array.isArray(resume.skills) || !resume.skills.length) return '';
+function sectionSkills(resume) {
+  if (!Array.isArray(resume.skills) || !resume.skills.length) return '';
   const items = resume.skills
     .filter((s) => s && s.name)
     .map((s) => `<li><span>${escapeHtml(s.name)}</span>${s.level ? `<span class="doc-skill__level">${escapeHtml(s.level)}</span>` : ''}</li>`)
@@ -196,8 +195,8 @@ function sectionSkills(resume, visible) {
   return `<section class="doc-section"><h2 class="doc-h2">Skills</h2><ul class="doc-skills">${items}</ul></section>`;
 }
 
-function sectionProjects(resume, visible) {
-  if (!visible('projects') || !Array.isArray(resume.projects) || !resume.projects.length) return '';
+function sectionProjects(resume) {
+  if (!Array.isArray(resume.projects) || !resume.projects.length) return '';
   const items = resume.projects.map((p) => {
     const head = `
       <div class="doc-entry__head">
@@ -210,8 +209,8 @@ function sectionProjects(resume, visible) {
   return `<section class="doc-section"><h2 class="doc-h2">Projects</h2>${items}</section>`;
 }
 
-function sectionCertifications(resume, visible) {
-  if (!visible('certifications') || !Array.isArray(resume.certifications) || !resume.certifications.length) return '';
+function sectionCertifications(resume) {
+  if (!Array.isArray(resume.certifications) || !resume.certifications.length) return '';
   const items = resume.certifications
     .filter((c) => c && c.name)
     .map((c) => {
@@ -222,8 +221,8 @@ function sectionCertifications(resume, visible) {
   return `<section class="doc-section"><h2 class="doc-h2">Certifications</h2><ul class="doc-bullets">${items}</ul></section>`;
 }
 
-function sectionLanguages(resume, visible) {
-  if (!visible('languages') || !Array.isArray(resume.languages) || !resume.languages.length) return '';
+function sectionLanguages(resume) {
+  if (!Array.isArray(resume.languages) || !resume.languages.length) return '';
   const items = resume.languages
     .filter((l) => l && l.name)
     .map((l) => {
@@ -233,8 +232,8 @@ function sectionLanguages(resume, visible) {
   return `<section class="doc-section"><h2 class="doc-h2">Languages</h2><ul class="doc-bullets">${items}</ul></section>`;
 }
 
-function sectionAwards(resume, visible) {
-  if (!visible('awards') || !Array.isArray(resume.awards) || !resume.awards.length) return '';
+function sectionAwards(resume) {
+  if (!Array.isArray(resume.awards) || !resume.awards.length) return '';
   const items = resume.awards
     .filter((a) => a && a.title)
     .map((a) => {
@@ -243,6 +242,67 @@ function sectionAwards(resume, visible) {
       return `<li>${escapeHtml(a.title)}${issuer}${date}</li>`;
     }).join('');
   return `<section class="doc-section"><h2 class="doc-h2">Awards</h2><ul class="doc-bullets">${items}</ul></section>`;
+}
+
+function sectionVolunteer(resume) {
+  if (!Array.isArray(resume.volunteer) || !resume.volunteer.length) return '';
+  const items = resume.volunteer.map((v) => {
+    const head = `
+      <div class="doc-entry__head">
+        <span class="doc-entry__title">${escapeHtml(v.role || '')}${v.organization ? ' — ' + escapeHtml(v.organization) : ''}</span>
+        <span class="doc-entry__meta">${renderDateRange(v.startDate, v.endDate, false)}</span>
+      </div>`;
+    const desc = v.description ? `<p class="doc-p doc-p--sm">${escapeHtml(v.description)}</p>` : '';
+    return `<div class="doc-entry">${head}${desc}</div>`;
+  }).join('');
+  return `<section class="doc-section"><h2 class="doc-h2">Volunteer</h2>${items}</section>`;
+}
+
+function sectionPublications(resume) {
+  if (!Array.isArray(resume.publications) || !resume.publications.length) return '';
+  const items = resume.publications
+    .filter((p) => p && p.title)
+    .map((p) => {
+      const venue = p.venue ? ` — ${escapeHtml(p.venue)}` : '';
+      const date = p.date ? ` (${escapeHtml(p.date)})` : '';
+      return `<li>${escapeHtml(p.title)}${venue}${date}</li>`;
+    }).join('');
+  return `<section class="doc-section"><h2 class="doc-h2">Publications</h2><ul class="doc-bullets">${items}</ul></section>`;
+}
+
+function sectionMemberships(resume) {
+  if (!Array.isArray(resume.memberships) || !resume.memberships.length) return '';
+  const items = resume.memberships
+    .filter((m) => m && m.organization)
+    .map((m) => {
+      const role = m.role ? ` — ${escapeHtml(m.role)}` : '';
+      const since = m.since ? ` (since ${escapeHtml(m.since)})` : '';
+      return `<li>${escapeHtml(m.organization)}${role}${since}</li>`;
+    }).join('');
+  return `<section class="doc-section"><h2 class="doc-h2">Memberships</h2><ul class="doc-bullets">${items}</ul></section>`;
+}
+
+function sectionReferences(resume) {
+  if (!Array.isArray(resume.references) || !resume.references.length) return '';
+  const items = resume.references
+    .filter((r) => r && r.name)
+    .map((r) => {
+      const rel = r.relationship ? ` — ${escapeHtml(r.relationship)}` : '';
+      const contact = r.contact ? ` (${escapeHtml(r.contact)})` : '';
+      return `<li>${escapeHtml(r.name)}${rel}${contact}</li>`;
+    }).join('');
+  return `<section class="doc-section"><h2 class="doc-h2">References</h2><ul class="doc-bullets">${items}</ul></section>`;
+}
+
+function sectionCustom(resume) {
+  if (!Array.isArray(resume.customSections) || !resume.customSections.length) return '';
+  return resume.customSections.map((cs) => {
+    if (!cs.title && !cs.content) return '';
+    return `<section class="doc-section">
+      <h2 class="doc-h2">${escapeHtml(cs.title || 'Section')}</h2>
+      <p class="doc-p">${escapeHtml(cs.content).replace(/\n/g, '<br>')}</p>
+    </section>`;
+  }).join('');
 }
 
 const SECTION_RENDERERS = {
@@ -254,15 +314,25 @@ const SECTION_RENDERERS = {
   certifications: sectionCertifications,
   languages: sectionLanguages,
   awards: sectionAwards,
+  volunteer: sectionVolunteer,
+  publications: sectionPublications,
+  memberships: sectionMemberships,
+  references: sectionReferences,
+  custom: sectionCustom,
 };
 
 const DEFAULT_ORDER = Object.keys(SECTION_RENDERERS);
 
-export function renderResumePreview(target, resume = SAMPLE_RESUME, templateId = resume.templateId) {
+export function renderResumePreview(target, resume = SAMPLE_RESUME, templateId = resume.templateId, supportedSections = null) {
   if (!target) return null;
 
   const visibility = resume.sectionVisibility || {};
-  const visible = (key) => visibility[key] !== false;
+  const visible = (key) => {
+    if (visibility[key] === false) return false;
+    if (Array.isArray(supportedSections) && !supportedSections.includes(key)) return false;
+    return true;
+  };
+
   const order = Array.isArray(resume.sectionOrder) && resume.sectionOrder.length
     ? resume.sectionOrder
     : DEFAULT_ORDER;
@@ -280,8 +350,9 @@ export function renderResumePreview(target, resume = SAMPLE_RESUME, templateId =
 
   const sectionsHtml = order
     .map((key) => {
+      if (!visible(key)) return '';
       const fn = SECTION_RENDERERS[key];
-      return fn ? fn(resume, visible) : '';
+      return fn ? fn(resume) : '';
     })
     .join('');
 

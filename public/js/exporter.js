@@ -1,21 +1,24 @@
 // Client-side PDF + DOCX export.
-//
-// PDF: renders the resume into a hidden iframe using the same
-// renderResumePreview function as the live preview, waits for fonts + images,
-// then calls iframe.contentWindow.print(). The browser's "Save as PDF" dialog
-// produces a pixel-accurate, multi-page PDF.
-//
-// DOCX: POSTs to /api/resumes/:id/export/docx and triggers a blob download.
-// Both require the resume to be saved (have an id); the caller must guard.
 
 import { renderResumePreview } from './template-samples.js';
-import { apiFetch } from './session.js';
 
-// ---------------------------------------------------------------------------
-// PDF
-// ---------------------------------------------------------------------------
+// Fetch template metadata once and cache by templateId.
+const templateCache = new Map();
+async function getSupportedSections(templateId) {
+  if (templateCache.has(templateId)) return templateCache.get(templateId);
+  try {
+    const res = await fetch('/api/templates/' + encodeURIComponent(templateId));
+    const data = await res.json();
+    const supported = data.template && data.template.supportedSections;
+    templateCache.set(templateId, supported || null);
+    return supported || null;
+  } catch {
+    templateCache.set(templateId, null);
+    return null;
+  }
+}
 
-export function exportPdf(resume, { filenameBase = 'Resume' } = {}) {
+export async function exportPdf(resume, { filenameBase = 'Resume' } = {}) {
   return new Promise((resolve, reject) => {
     try {
       const iframe = document.createElement('iframe');
@@ -36,28 +39,33 @@ export function exportPdf(resume, { filenameBase = 'Resume' } = {}) {
       doc.close();
 
       const host = doc.querySelector('[data-print-host]');
-      renderResumePreview(host, resume, resume.templateId);
-      applyThemeVars(host, resume);
+      // Show a loading indicator inside the print host
+      host.innerHTML = '<div style="padding:40px;text-align:center;font-family:Inter,sans-serif;color:#64748b;">Preparing PDF…</div>';
 
-      // Wait for fonts, images, and layout to settle, then print.
-      waitForReady(iframe).then(() => {
-        const w = iframe.contentWindow;
-        // Some browsers fire print synchronously; wait one frame.
-        setTimeout(() => {
-          try {
-            w.focus();
-            w.print();
-          } catch (err) {
-            cleanup();
-            reject(err);
-            return;
-          }
-          // Give the print dialog time to grab the content, then clean up.
+      getSupportedSections(resume.templateId).then((supported) => {
+        renderResumePreview(host, resume, resume.templateId, supported);
+        applyThemeVars(host, resume);
+
+        waitForReady(iframe).then(() => {
+          const w = iframe.contentWindow;
           setTimeout(() => {
-            cleanup();
-            resolve({ filenameBase });
-          }, 30000);
-        }, 100);
+            try {
+              w.focus();
+              w.print();
+            } catch (err) {
+              cleanup();
+              reject(err);
+              return;
+            }
+            setTimeout(() => {
+              cleanup();
+              resolve({ filenameBase });
+            }, 30000);
+          }, 100);
+        }).catch((err) => {
+          cleanup();
+          reject(err);
+        });
       }).catch((err) => {
         cleanup();
         reject(err);
@@ -88,7 +96,6 @@ function waitForReady(iframe) {
   const imagesReady = Promise.all(images.map((img) => new Promise((res) => {
     img.addEventListener('load', res, { once: true });
     img.addEventListener('error', res, { once: true });
-    // Cap the wait so a slow image host doesn't hang the dialog.
     setTimeout(res, 4000);
   })));
   return Promise.all([fontsReady, imagesReady]);
@@ -105,7 +112,6 @@ function buildPrintHtml() {
   <link rel="stylesheet" href="${origin}/static/templates/preview.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" />
   <style>
-    /* Print tuning */
     @page { size: A4; margin: 0; }
     html, body { background: #ffffff !important; margin: 0 !important; padding: 0 !important; }
     body > * { box-shadow: none !important; }
@@ -117,10 +123,7 @@ function buildPrintHtml() {
       max-width: 210mm !important;
       min-height: 297mm !important;
     }
-    /* Hide the site header/footer chrome if the shared.js ever injects here;
-       harmless in the current build since only the doc is injected. */
     .site-header, .site-footer, .skip-link { display: none !important; }
-    /* Prevent orphan section headings at page breaks */
     .doc-h2 { break-after: avoid; page-break-after: avoid; }
     .doc-entry { break-inside: avoid; page-break-inside: avoid; }
     .doc-bullets li { break-inside: avoid; }
@@ -132,16 +135,13 @@ function buildPrintHtml() {
 </html>`;
 }
 
-// ---------------------------------------------------------------------------
-// DOCX
-// ---------------------------------------------------------------------------
-
 export async function exportDocx(resumeId) {
   if (!resumeId) throw new Error('Save the resume first to download a DOCX.');
+  const token = await import('./session.js').then((m) => m.getSessionToken());
   const res = await fetch(`/api/resumes/${resumeId}/export/docx`, {
     method: 'POST',
     headers: {
-      'X-Session-Token': (await import('./session.js')).getSessionToken(),
+      'X-Session-Token': token,
       Accept: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     },
   });

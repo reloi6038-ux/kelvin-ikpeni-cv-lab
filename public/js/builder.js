@@ -1,15 +1,5 @@
 // ---------------------------------------------------------------------------
 // Kelvin Ikpeni CV Lab — Builder page controller.
-//
-// Responsibilities:
-//  - Determine initial template (query ?template → kilab.pendingTemplateId →
-//    active resume's template → default).
-//  - Load existing resume (from ?id=, kilab.activeResumeId, or local draft).
-//  - Initialize editor and live preview.
-//  - Autosave to localStorage (debounced), manual save to API.
-//  - Undo/redo snapshots, resume manager, completion ring, template warnings.
-//  - Download menu (PDF via browser print, DOCX via server).
-//  - Screen-reader announcements via kilab:announce events (Phase 9).
 // ---------------------------------------------------------------------------
 
 import { apiFetch } from './session.js';
@@ -38,8 +28,6 @@ const state = {
 const templatesById = new Map();
 let savedResumes = [];
 
-// ---- DOM cache ---------------------------------------------------------
-
 function cacheEls() {
   els.title = document.querySelector('[data-resume-title]');
   els.templateSelect = document.querySelector('[data-template-select]');
@@ -63,8 +51,6 @@ function cacheEls() {
   els.mobileToggle = document.querySelector('[data-mobile-toggle]');
   els.workspace = document.querySelector('[data-workspace]');
 }
-
-// ---- Utility -----------------------------------------------------------
 
 function escapeHtml(s = '') {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -98,11 +84,7 @@ function toast(msg, kind = 'info') {
   toast._t = setTimeout(() => { els.toast.hidden = true; }, 3500);
 }
 
-// ---- Drafts ------------------------------------------------------------
-
-function draftKey() {
-  return DRAFT_PREFIX + (state.resumeId || 'new');
-}
+function draftKey() { return DRAFT_PREFIX + (state.resumeId || 'new'); }
 function saveDraft() {
   try { localStorage.setItem(draftKey(), JSON.stringify(state.resume)); } catch { /* ignore */ }
 }
@@ -115,8 +97,6 @@ function loadDraft() {
 function clearDraft() {
   try { localStorage.removeItem(draftKey()); } catch { /* ignore */ }
 }
-
-// ---- Templates ---------------------------------------------------------
 
 function readPendingTemplateId() {
   const q = new URLSearchParams(window.location.search).get('template');
@@ -138,8 +118,6 @@ async function loadTemplates() {
     console.error('Failed to load templates:', err);
   }
 }
-
-// ---- Template-support warnings -----------------------------------------
 
 function checkTemplateSupport() {
   if (!els.warnEl) return;
@@ -170,8 +148,6 @@ function checkTemplateSupport() {
     `Switch templates or hide those sections in Section visibility.`;
 }
 
-// ---- Completion ring ---------------------------------------------------
-
 function computeCompletion() {
   const r = state.resume;
   const checks = [
@@ -193,11 +169,15 @@ function renderCompletion() {
   els.completionEl.setAttribute('aria-label', `Resume completion: ${pct}%`);
 }
 
-// ---- Preview -----------------------------------------------------------
-
+// --- PHASE 11.1: pass supportedSections to renderer ---
 function renderPreview() {
   if (!els.previewHost || !state.resume) return;
-  renderResumePreview(els.previewHost, state.resume, state.resume.templateId);
+
+  const tpl = templatesById.get(state.resume.templateId);
+  const supported = tpl ? tpl.supportedSections : null;
+
+  renderResumePreview(els.previewHost, state.resume, state.resume.templateId, supported);
+
   const doc = els.previewHost.firstElementChild;
   if (doc && state.resume.theme) {
     if (state.resume.theme.accentColor) doc.style.setProperty('--doc-accent', state.resume.theme.accentColor);
@@ -206,8 +186,6 @@ function renderPreview() {
     if (state.resume.theme.spacing) doc.style.setProperty('--doc-space', String(state.resume.theme.spacing));
   }
 }
-
-// ---- Autosave & history ------------------------------------------------
 
 let saveTimer = null;
 let historyCommitTimer = null;
@@ -257,22 +235,13 @@ function applyHistorySnapshot(snapshot) {
 function undo() {
   if (!state.history) return;
   const s = state.history.undo();
-  if (s) {
-    applyHistorySnapshot(s);
-    announce('Undone.');
-  }
+  if (s) { applyHistorySnapshot(s); announce('Undone.'); }
 }
-
 function redo() {
   if (!state.history) return;
   const s = state.history.redo();
-  if (s) {
-    applyHistorySnapshot(s);
-    announce('Redone.');
-  }
+  if (s) { applyHistorySnapshot(s); announce('Redone.'); }
 }
-
-// ---- Save / delete -----------------------------------------------------
 
 async function manualSave() {
   if (state.isSaving || !state.resume) return;
@@ -282,12 +251,9 @@ async function manualSave() {
 
   try {
     const payload = JSON.parse(JSON.stringify(state.resume));
-    delete payload._id;
-    delete payload.id;
-    delete payload.createdAt;
-    delete payload.updatedAt;
-    delete payload.ownerHash;
-    delete payload.deletedAt;
+    delete payload._id; delete payload.id;
+    delete payload.createdAt; delete payload.updatedAt;
+    delete payload.ownerHash; delete payload.deletedAt;
 
     const res = state.resumeId
       ? await apiFetch(`/api/resumes/${state.resumeId}`, { method: 'PATCH', body: JSON.stringify(payload) })
@@ -333,15 +299,9 @@ async function handleDeleteCurrent() {
   }
 }
 
-// ---- Resume manager ----------------------------------------------------
-
 async function refreshSavedResumes() {
-  try {
-    savedResumes = await listResumes();
-  } catch (err) {
-    console.error('List resumes failed:', err);
-    savedResumes = [];
-  }
+  try { savedResumes = await listResumes(); }
+  catch (err) { console.error('List resumes failed:', err); savedResumes = []; }
   renderResumeMenu();
 }
 
@@ -399,24 +359,16 @@ async function handleResumeMenuClick(e) {
       toast('Duplicated: ' + copy.title, 'ok');
       announce('Resume duplicated.');
       await refreshSavedResumes();
-    } catch (err) {
-      toast('Duplicate failed: ' + err.message, 'error');
-    }
+    } catch (err) { toast('Duplicate failed: ' + err.message, 'error'); }
   } else if (act === 'del') {
     if (!confirm('Delete this saved resume?')) return;
     try {
       await deleteResumeById(id);
-      if (id === state.resumeId) {
-        state.resumeId = null;
-        setActiveResumeId(null);
-        updateDownloadMenuState();
-      }
+      if (id === state.resumeId) { state.resumeId = null; setActiveResumeId(null); updateDownloadMenuState(); }
       toast('Deleted.', 'ok');
       announce('Resume deleted.');
       await refreshSavedResumes();
-    } catch (err) {
-      toast('Delete failed: ' + err.message, 'error');
-    }
+    } catch (err) { toast('Delete failed: ' + err.message, 'error'); }
   }
 }
 
@@ -426,11 +378,7 @@ function toggleResumeMenu() {
   els.resumeMenu.hidden = false;
   refreshSavedResumes();
 }
-function hideResumeMenu() {
-  if (els.resumeMenu) els.resumeMenu.hidden = true;
-}
-
-// ---- Download menu -----------------------------------------------------
+function hideResumeMenu() { if (els.resumeMenu) els.resumeMenu.hidden = true; }
 
 function updateDownloadMenuState() {
   if (!els.downloadMenu) return;
@@ -448,9 +396,7 @@ function toggleDownloadMenu() {
   updateDownloadMenuState();
   els.downloadMenu.hidden = false;
 }
-function hideDownloadMenu() {
-  if (els.downloadMenu) els.downloadMenu.hidden = true;
-}
+function hideDownloadMenu() { if (els.downloadMenu) els.downloadMenu.hidden = true; }
 
 async function handleDownloadClick(e) {
   const btn = e.target.closest('[data-export]');
@@ -486,8 +432,6 @@ async function handleDownloadClick(e) {
   }
 }
 
-// ---- Normalization -----------------------------------------------------
-
 function normalizeResume(r) {
   const base = createEmptyResume(r.templateId || 'modern-professional');
   return {
@@ -497,8 +441,6 @@ function normalizeResume(r) {
     theme: { ...base.theme, ...(r.theme || {}) },
   };
 }
-
-// ---- Init --------------------------------------------------------------
 
 async function init() {
   cacheEls();
@@ -558,13 +500,10 @@ async function init() {
 
   if (els.saveBtn) els.saveBtn.addEventListener('click', manualSave);
   if (els.deleteBtn) els.deleteBtn.addEventListener('click', handleDeleteCurrent);
-
   if (els.resumeBtn) els.resumeBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleResumeMenu(); });
   if (els.resumeList) els.resumeList.addEventListener('click', handleResumeMenuClick);
-
   if (els.undoBtn) els.undoBtn.addEventListener('click', undo);
   if (els.redoBtn) els.redoBtn.addEventListener('click', redo);
-
   if (els.downloadBtn) els.downloadBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleDownloadMenu(); });
   if (els.downloadMenu) els.downloadMenu.addEventListener('click', handleDownloadClick);
 
@@ -585,12 +524,7 @@ async function init() {
     });
   }
 
-  initEditor({
-    state,
-    panelEl: els.panel,
-    navEl: els.nav,
-    onChange: onResumeChanged,
-  });
+  initEditor({ state, panelEl: els.panel, navEl: els.nav, onChange: onResumeChanged });
 
   renderPreview();
   renderCompletion();
@@ -600,26 +534,17 @@ async function init() {
 
   window.addEventListener('keydown', (e) => {
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === 's') {
-      e.preventDefault();
-      manualSave();
-    } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'z') {
-      e.preventDefault();
-      undo();
-    } else if (mod && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
-      e.preventDefault();
-      redo();
-    } else if (e.key === 'Escape') {
+    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); manualSave(); }
+    else if (mod && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    else if (mod && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); }
+    else if (e.key === 'Escape') {
       if (els.resumeMenu && !els.resumeMenu.hidden) hideResumeMenu();
       if (els.downloadMenu && !els.downloadMenu.hidden) hideDownloadMenu();
     }
   });
 
   window.addEventListener('beforeunload', (e) => {
-    if (state.isDirty) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
+    if (state.isDirty) { e.preventDefault(); e.returnValue = ''; }
   });
 
   try { localStorage.removeItem(PENDING_TEMPLATE_KEY); } catch { /* ignore */ }
@@ -631,6 +556,5 @@ if (document.readyState === 'loading') {
   init();
 }
 
-// Exports for Phase 7 export module and future use.
 export function getCurrentResume() { return state.resume; }
 export function getCurrentResumeId() { return state.resumeId; }

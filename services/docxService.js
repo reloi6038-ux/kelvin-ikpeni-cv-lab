@@ -1,14 +1,10 @@
 'use strict';
 
-// Builds a real, editable .docx from a resume JSON object using the `docx`
-// package. Complex multi-column templates degrade to a clean single-column
-// document, which is intentional: DOCX consumers (recruiters, ATS) want
-// structured, editable content — not pixel-perfect layout.
-
 const {
-  Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
+  Document, Packer, Paragraph, TextRun, AlignmentType,
   BorderStyle, TabStopType, TabStopPosition,
 } = require('docx');
+const registry = require('./templateRegistry');
 
 const ACCENT = '2563EB';
 const INK = '0F172A';
@@ -284,7 +280,15 @@ const SECTION_RENDERERS = {
 
 async function buildResumeDocx(resume) {
   const visibility = resume.sectionVisibility || {};
-  const visible = (k) => visibility[k] !== false;
+  const template = registry.get(resume.templateId);
+  const supported = template ? template.supportedSections : null;
+
+  const visible = (k) => {
+    if (visibility[k] === false) return false;
+    if (Array.isArray(supported) && !supported.includes(k)) return false;
+    return true;
+  };
+
   const order = Array.isArray(resume.sectionOrder) && resume.sectionOrder.length
     ? resume.sectionOrder
     : ['summary', 'experience', 'education', 'skills', 'projects', 'certifications',
@@ -311,7 +315,7 @@ async function buildResumeDocx(resume) {
     sections: [{
       properties: {
         page: {
-          margin: { top: 720, right: 720, bottom: 720, left: 720 }, // 0.5 inch
+          margin: { top: 720, right: 720, bottom: 720, left: 720 },
         },
       },
       children: body,
